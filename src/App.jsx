@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { FormProvider } from '@formily/react'
 import { FormLayout } from '@formily/antd-v5'
 import {
   ConfigProvider, message, Alert, Button, Space,
-  Select as AntSelect, Input as AntInput,
+  Select as AntSelect, Input as AntInput, Modal,
 } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import 'antd/dist/reset.css'
@@ -13,7 +13,7 @@ import { SchemaField } from './form/schemaField'
 import { BlockCollapseContext } from './form/layout'
 import { metadataToSchema } from './metadataToSchema'
 import { stripInternalKeys, checkedKeysToConfig, hideEmptyValues } from './visibility'
-import { fetchMetadata as apiFetchMetadata, submitCall } from './api/sapClient'
+import { fetchMetadata as apiFetchMetadata, submitCall, store as sapStore } from './api/sapClient'
 import { useDynamicForm } from './hooks/useDynamicForm'
 import { useCallHistory } from './hooks/useCallHistory'
 import { useVariants } from './hooks/useVariants'
@@ -23,6 +23,7 @@ import MetaModal from './components/MetaModal'
 import DataFillModal from './components/DataFillModal'
 import HistoryModal from './components/HistoryModal'
 import VariantModal from './components/VariantModal'
+import ShareInboxModal from './components/ShareInboxModal'
 import ResultModal from './components/ResultModal'
 import VisibilityModal from './components/VisibilityModal'
 import ProfileModal from './components/ProfileModal'
@@ -35,13 +36,44 @@ export default function App() {
     applySchema, applySchemaKeepState, restore,
   } = useDynamicForm()
 
-  // 调用记录 & 变式 & 显隐方案三套持久化
-  const { history, recordCall, renameCall, deleteHistory, clearHistory, getSchema, exportBundle, importBundle } = useCallHistory()
+  // 接口认证参数（元数据、提交调用、记录/变式/分享 存储 API 都复用）
+  const [env, setEnv] = useState('dev')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const getAuth = useCallback(() => ({ env, username, password }), [env, username, password])
+
+  // 调用记录 & 变式（SAP 后端存储，异步）& 显隐方案（仍本地）
   const {
-    variants, saveVariant, deleteVariant, clearVariants,
-    getSchema: getVariantSchema, exportBundle: exportVariants, importBundle: importVariants,
-  } = useVariants()
+    history, loading: historyLoading, refresh: refreshHistory,
+    recordCall, renameCall, deleteHistory, clearHistory, getFull: getHistoryFull,
+    exportAll: exportHistoryAll, exportOne: exportHistoryOne, importBundle: importHistory,
+  } = useCallHistory(getAuth)
+  const {
+    variants, loading: variantLoading, refresh: refreshVariants,
+    saveVariant, deleteVariant, clearVariants, getFull: getVariantFull,
+    exportAll: exportVariantAll, exportOne: exportVariantOne, importBundle: importVariants,
+  } = useVariants(getAuth)
   const { profiles, saveProfile, deleteProfile, clearProfiles } = useVisibilityProfiles()
+
+  // 「分享给我的」收件箱
+  const [inboxOpen, setInboxOpen] = useState(false)
+  const [inbox, setInbox] = useState([])
+  const [inboxLoading, setInboxLoading] = useState(false)
+  const refreshInbox = useCallback(async () => {
+    setInboxLoading(true)
+    try {
+      const list = await sapStore.shareInbox(getAuth())
+      setInbox(Array.isArray(list) ? list : [])
+    } catch { /* 未登录/无权限时静默，打开弹窗会再提示 */ } finally {
+      setInboxLoading(false)
+    }
+  }, [getAuth])
+
+  // 分享弹窗（手动填接收人 SAP 用户名 + 附言）
+  const [shareTarget, setShareTarget] = useState(null) // 正在分享的记录
+  const [shareUname, setShareUname] = useState('')
+  const [shareNote, setShareNote] = useState('')
+  const [shareBusy, setShareBusy] = useState(false)
 
   // 数据回填相关
   const [dataOpen, setDataOpen] = useState(false)
@@ -59,10 +91,7 @@ export default function App() {
   const [metaLoading, setMetaLoading] = useState(false)
   const [metaAiLoading, setMetaAiLoading] = useState(false) // AI 获取元数据按钮的 loading
 
-  // 接口调用相关
-  const [env, setEnv] = useState('dev')
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
+  // 接口调用结果相关
   const [result, setResult] = useState(null)     // { ok, status, body }
   const [resultOpen, setResultOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -200,100 +229,166 @@ export default function App() {
     }
   }
 
+  // ---- 调用记录 / 变式：打开即拉列表 ----
+
+  // 首次挂载 best-effort 拉一次（BSP 会话有效时即出数；本地未填账号时静默失败，打开弹窗会再拉）
+  useEffect(() => {
+    refreshHistory().catch(() => {})
+    refreshVariants().catch(() => {})
+    refreshInbox().catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const openHistory = () => { setHistoryOpen(true); refreshHistory().catch((e) => message.error('加载记录失败：' + e.message)) }
+  const openVariants = () => { setVariantOpen(true); refreshVariants().catch((e) => message.error('加载变式失败：' + e.message)) }
+  const openInbox = () => { setInboxOpen(true); refreshInbox() }
+
   // ---- 调用记录 ----
 
-  // 从记录恢复：schema 从池里按引用取回，值/显隐配置一并还原
-  const restoreFromHistory = (rec) => {
-    const schema = getSchema(rec) || applied
-    const hasSchema = !!getSchema(rec)
-    restore(schema, rec.values || {}, rec.config || {})
-    if (rec.action) setMetaFuncName(rec.action)
-    if (rec.env && ENVIRONMENTS[rec.env]) setEnv(rec.env)
-    setHistoryOpen(false)
-    message.success(hasSchema ? '已从记录填充（含 Schema）' : '已从记录填充（该记录无 Schema）')
+  const restoreFromHistory = async (rec) => {
+    try {
+      const full = await getHistoryFull(rec.id)
+      restore(full?.schema || applied, full?.values || {}, full?.config || {})
+      if (rec.action) setMetaFuncName(rec.action)
+      if (rec.env && ENVIRONMENTS[rec.env]) setEnv(rec.env)
+      setHistoryOpen(false)
+      message.success('已从记录填充')
+    } catch (e) { message.error('填充失败：' + e.message) }
   }
 
-  const onDeleteHistory = (id) => { deleteHistory(id); message.success('已删除该记录') }
-  const onClearHistory = () => { clearHistory(); message.success('已清空调用记录') }
-
-  // 重命名一条调用记录（给记录起个好记的名字，不影响填充/导出）
-  const onRenameHistory = (id, name) => { renameCall(id, name.trim()); message.success('已重命名') }
-
-  // 查看某条记录当时的接口返回消息（复用结果弹窗）
-  const onViewHistoryBody = (rec) => {
-    setResult({ ok: rec.ok, status: rec.status, body: rec.body ?? '（该记录未存返回消息）' })
-    setResultOpen(true)
+  const onDeleteHistory = async (id) => {
+    try { await deleteHistory(id); await refreshHistory(); message.success('已删除该记录') }
+    catch (e) { message.error('删除失败：' + e.message) }
+  }
+  const onClearHistory = async () => {
+    try { await clearHistory(); await refreshHistory(); message.success('已清空调用记录') }
+    catch (e) { message.error('清空失败：' + e.message) }
+  }
+  const onRenameHistory = async (id, name) => {
+    try { await renameCall(id, name.trim()); await refreshHistory(); message.success('已重命名') }
+    catch (e) { message.error('重命名失败：' + e.message) }
   }
 
-  // 下载调用记录（含引用的 Schema）为 JSON，分享给别人
-  const onExportHistory = () => {
+  // 查看某条记录当时的接口返回消息（按需拉完整数据，复用结果弹窗）
+  const onViewHistoryBody = async (rec) => {
+    try {
+      const full = await getHistoryFull(rec.id)
+      setResult({ ok: rec.ok, status: rec.status, body: full?.body ?? '（该记录未存返回消息）' })
+      setResultOpen(true)
+    } catch (e) { message.error('读取失败：' + e.message) }
+  }
+
+  const onExportHistory = async () => {
     if (!history.length) { message.warning('暂无调用记录可下载'); return }
-    downloadJson(timestampName('call-history'), exportBundle())
-    message.success('已下载全部调用记录')
+    try {
+      downloadJson(timestampName('call-history'), await exportHistoryAll())
+      message.success('已下载全部调用记录')
+    } catch (e) { message.error('下载失败：' + e.message) }
   }
-
-  // 只下载选中的那一条记录（含它引用的 Schema）
-  const onExportOne = (rec) => {
-    const safe = (rec.action || 'record').replace(/[^\w.-]+/g, '_').slice(0, 40)
-    downloadJson(timestampName(`call-record-${safe}`), exportBundle([rec]))
-    message.success('已下载该条记录')
+  const onExportOne = async (rec) => {
+    try {
+      const safe = (rec.name || rec.action || 'record').replace(/[^\w.-]+/g, '_').slice(0, 40)
+      downloadJson(timestampName(`call-record-${safe}`), await exportHistoryOne(rec))
+      message.success('已下载该条记录')
+    } catch (e) { message.error('下载失败：' + e.message) }
   }
-
-  // 导入别人分享的调用记录文件（合并进现有记录，非破坏性）
   const onImportHistoryFile = async (file) => {
     try {
-      const data = JSON.parse(await file.text())
-      const added = importBundle(data)
-      message.success(added ? `已导入 ${added} 条新记录` : '没有新增记录（可能都已存在）')
-    } catch (e) {
-      message.error('导入失败：' + e.message)
-    }
+      const added = await importHistory(JSON.parse(await file.text()))
+      message.success(`已导入 ${added} 条记录`)
+    } catch (e) { message.error('导入失败：' + e.message) }
   }
 
   // ---- 变式（命名的表单状态：值 + Schema + 显隐配置）----
 
-  // 保存当前表单为一个命名变式
-  const onSaveVariant = (name) => {
-    saveVariant({
-      name,
-      applied,
-      values: stripInternalKeys(form.values ?? {}),
-      config,
-      action: metaFuncName.trim(),
-    })
-    message.success(`已保存变式「${name}」`)
+  const onSaveVariant = async (name) => {
+    try {
+      await saveVariant({ name, applied, values: stripInternalKeys(form.values ?? {}), config, action: metaFuncName.trim() })
+      await refreshVariants()
+      message.success(`已保存变式「${name}」`)
+    } catch (e) { message.error('保存失败：' + e.message) }
   }
 
-  // 应用变式：连布局(Schema)、字段值、显隐配置一起还原（等同调用记录的填充）
-  const restoreVariant = (rec) => {
-    const schema = getVariantSchema(rec) || applied
-    restore(schema, rec.values || {}, rec.config || {})
-    if (rec.action) setMetaFuncName(rec.action)
-    setVariantOpen(false)
-    message.success(`已应用变式「${rec.name || '未命名'}」`)
+  const restoreVariant = async (rec) => {
+    try {
+      const full = await getVariantFull(rec.id)
+      restore(full?.schema || applied, full?.values || {}, full?.config || {})
+      if (rec.action) setMetaFuncName(rec.action)
+      setVariantOpen(false)
+      message.success(`已应用变式「${rec.name || '未命名'}」`)
+    } catch (e) { message.error('应用失败：' + e.message) }
   }
 
-  const onDeleteVariant = (id) => { deleteVariant(id); message.success('已删除该变式') }
-  const onClearVariants = () => { clearVariants(); message.success('已清空变式') }
-
-  const onExportVariants = () => {
+  const onDeleteVariant = async (id) => {
+    try { await deleteVariant(id); await refreshVariants(); message.success('已删除该变式') }
+    catch (e) { message.error('删除失败：' + e.message) }
+  }
+  const onClearVariants = async () => {
+    try { await clearVariants(); await refreshVariants(); message.success('已清空变式') }
+    catch (e) { message.error('清空失败：' + e.message) }
+  }
+  const onExportVariants = async () => {
     if (!variants.length) { message.warning('暂无变式可下载'); return }
-    downloadJson(timestampName('variants'), exportVariants())
-    message.success('已下载全部变式')
+    try {
+      downloadJson(timestampName('variants'), await exportVariantAll())
+      message.success('已下载全部变式')
+    } catch (e) { message.error('下载失败：' + e.message) }
   }
-  const onExportOneVariant = (rec) => {
-    const safe = (rec.name || 'variant').replace(/[^\w.-]+/g, '_').slice(0, 40)
-    downloadJson(timestampName(`variant-${safe}`), exportVariants([rec]))
-    message.success('已下载该变式')
+  const onExportOneVariant = async (rec) => {
+    try {
+      const safe = (rec.name || 'variant').replace(/[^\w.-]+/g, '_').slice(0, 40)
+      downloadJson(timestampName(`variant-${safe}`), await exportVariantOne(rec))
+      message.success('已下载该变式')
+    } catch (e) { message.error('下载失败：' + e.message) }
   }
   const onImportVariantFile = async (file) => {
     try {
-      const data = JSON.parse(await file.text())
-      const added = importVariants(data)
-      message.success(added ? `已导入 ${added} 个新变式` : '没有新增变式（可能都已存在）')
-    } catch (e) {
-      message.error('导入失败：' + e.message)
-    }
+      const added = await importVariants(JSON.parse(await file.text()))
+      message.success(`已导入 ${added} 个变式`)
+    } catch (e) { message.error('导入失败：' + e.message) }
+  }
+
+  // ---- 分享 & 收件箱 ----
+
+  const openShare = (rec) => { setShareTarget(rec); setShareUname(''); setShareNote('') }
+  const doShare = async () => {
+    if (!shareUname.trim()) { message.error('请填写接收人 SAP 用户名'); return }
+    setShareBusy(true)
+    try {
+      await sapStore.shareAdd(shareTarget.id, shareUname.trim(), shareNote.trim(), getAuth())
+      message.success('已分享给 ' + shareUname.trim().toUpperCase())
+      setShareTarget(null)
+    } catch (e) { message.error('分享失败：' + e.message) } finally { setShareBusy(false) }
+  }
+
+  // 收件箱：填充（读取分享的完整数据还原到表单）
+  const onInboxFill = async (it) => {
+    try {
+      const full = await sapStore.shareGet(it.share_id, getAuth())
+      restore(full?.schema || applied, full?.values || {}, full?.config || {})
+      if (it.action) setMetaFuncName(it.action)
+      setInboxOpen(false)
+      refreshInbox() // 已读态更新
+      message.success('已从分享填充')
+    } catch (e) { message.error('填充失败：' + e.message) }
+  }
+  // 收件箱：另存为我的（复制成自己的记录，占自己额度）
+  const onInboxSaveAs = async (it) => {
+    try {
+      const full = await sapStore.shareGet(it.share_id, getAuth())
+      await sapStore.recSave({
+        kind: it.kind, rec_name: it.name || '', action: it.action || '',
+        environ: '', env_label: '', ok_flag: '', status: '',
+        payload: JSON.stringify(full || {}),
+      }, getAuth())
+      if (it.kind === 'VAR') refreshVariants(); else refreshHistory()
+      refreshInbox()
+      message.success('已另存为我的' + (it.kind === 'VAR' ? '变式' : '调用记录'))
+    } catch (e) { message.error('另存为失败：' + e.message) }
+  }
+  const onInboxRemove = async (it) => {
+    try { await sapStore.shareRemove(it.share_id, getAuth()); await refreshInbox(); message.success('已移除') }
+    catch (e) { message.error('移除失败：' + e.message) }
   }
 
   // ---- 提交调用 SAP ----
@@ -314,14 +409,14 @@ export default function App() {
       const res = await submitCall({ env, username, password, action, payload })
       setResult(res)
       setResultOpen(true)
-      recordCall({ applied, values: payload, ok: res.ok, status: res.status, env, envLabel: ENVIRONMENTS[env].label, action, config, body: res.body })
+      try { await recordCall({ applied, values: payload, ok: res.ok, status: res.status, env, envLabel: ENVIRONMENTS[env].label, action, config, body: res.body }) } catch { /* 记录落库失败不影响调用结果 */ }
       if (res.ok) message.success('调用成功')
       else message.error(`接口返回 HTTP ${res.status}`)
     } catch (e) {
       // 网络错误 / CORS 拦截通常走这里
       setResult({ ok: false, status: '请求失败', body: String(e) })
       setResultOpen(true)
-      recordCall({ applied, values: payload, ok: false, status: '请求失败', env, envLabel: ENVIRONMENTS[env].label, action, config, body: String(e) })
+      try { await recordCall({ applied, values: payload, ok: false, status: '请求失败', env, envLabel: ENVIRONMENTS[env].label, action, config, body: String(e) }) } catch { /* 同上 */ }
       message.error('请求失败：' + e.message)
     }
   }
@@ -447,8 +542,11 @@ export default function App() {
 
             {/* 右：动作按钮 + 提交 */}
             <Space wrap size={8}>
-              <Button onClick={() => setHistoryOpen(true)}>调用记录（{history.length}）</Button>
-              <Button onClick={() => setVariantOpen(true)}>变式（{variants.length}）</Button>
+              <Button onClick={openHistory} loading={historyLoading}>调用记录（{history.length}）</Button>
+              <Button onClick={openVariants} loading={variantLoading}>变式（{variants.length}）</Button>
+              <Button onClick={openInbox}>
+                分享给我的（{inbox.length}{inbox.some((i) => i.read_flag !== 'X') ? ' ·新' : ''}）
+              </Button>
               <Button onClick={toggleCollapseAll} disabled={!hasForm}>{allCollapsed ? '全部展开' : '全部折叠'}</Button>
               <Button onClick={openVisConfig} disabled={!hasForm}>字段显隐</Button>
               <Button onClick={openDataFill} disabled={!hasForm}>填充数据 JSON</Button>
@@ -517,10 +615,12 @@ export default function App() {
           open={historyOpen}
           onClose={() => setHistoryOpen(false)}
           history={history}
+          loading={historyLoading}
           limit={STORAGE.historyLimit}
           onRestore={restoreFromHistory}
           onRename={onRenameHistory}
           onViewBody={onViewHistoryBody}
+          onShare={openShare}
           onDelete={onDeleteHistory}
           onClear={onClearHistory}
           onExport={onExportHistory}
@@ -532,16 +632,56 @@ export default function App() {
           open={variantOpen}
           onClose={() => setVariantOpen(false)}
           variants={variants}
+          loading={variantLoading}
           limit={STORAGE.variantLimit}
           canSave={hasForm}
           onSave={onSaveVariant}
           onRestore={restoreVariant}
+          onShare={openShare}
           onDelete={onDeleteVariant}
           onClear={onClearVariants}
           onExport={onExportVariants}
           onExportOne={onExportOneVariant}
           onImportFile={onImportVariantFile}
         />
+
+        <ShareInboxModal
+          open={inboxOpen}
+          onClose={() => setInboxOpen(false)}
+          inbox={inbox}
+          loading={inboxLoading}
+          onFill={onInboxFill}
+          onSaveAs={onInboxSaveAs}
+          onRemove={onInboxRemove}
+        />
+
+        {/* 分享小窗：手动填接收人 SAP 用户名 + 附言（全用 antd 现成组件） */}
+        <Modal
+          title={shareTarget ? `分享「${shareTarget.name || shareTarget.action || '记录'}」给指定人` : '分享'}
+          open={!!shareTarget}
+          onCancel={() => setShareTarget(null)}
+          onOk={doShare}
+          confirmLoading={shareBusy}
+          okText="分享"
+          cancelText="取消"
+        >
+          <div style={{ marginBottom: 6 }}>接收人 SAP 用户名：</div>
+          <AntInput
+            value={shareUname}
+            onChange={(e) => setShareUname(e.target.value)}
+            onPressEnter={doShare}
+            placeholder="如 ZHANGSAN（对方登录 SAP 的账号）"
+            autoFocus
+          />
+          <div style={{ margin: '12px 0 6px' }}>附言（可选）：</div>
+          <AntInput.TextArea
+            value={shareNote}
+            onChange={(e) => setShareNote(e.target.value)}
+            rows={2}
+            maxLength={100}
+            placeholder="给对方留句话"
+          />
+        </Modal>
 
         <ResultModal open={resultOpen} onClose={() => setResultOpen(false)} result={result} />
 

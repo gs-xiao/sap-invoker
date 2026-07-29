@@ -1,136 +1,115 @@
-// 通用「带 Schema 去重池 + 打包导出/导入」的记录存储核心。
-// 调用记录 useCallHistory 与 变式 useVariants 共用它——两者都是「一批引用了大 Schema 的记录」，
-// 逻辑完全一致：记录只存 schemaId，整份 schema 去重存池，导出时只带被引用的那几份。
-//
-// 单条记录形状（各调用方自行补业务字段）：
-//   { id, time, schemaId, ...业务字段（如 action/config/values/name/ok/status） }
-import { useRef, useState } from 'react'
+// SAP 后端存储 hook（替代原 localStorage + Schema 去重池版）。
+// 记录统一存在 SAP 的 ZINVOKER_REC 表，经 Z_INVOKER_STORE（按 op 分派）读写：
+//   · records = 轻量元信息列表（不含 schema/values/body），弹窗打开时异步拉取；
+//   · 完整数据（schema/values/config/body）按需 getFull(id) 单条拉取（填充/查看/导出时）。
+// 调用记录 useCallHistory(kind='HIST') 与 变式 useVariants(kind='VAR') 共用它。
+import { useState, useCallback } from 'react'
+import { store as api } from '../api/sapClient'
 
-const loadJson = (key, fallback) => {
-  try { return JSON.parse(localStorage.getItem(key)) ?? fallback } catch { return fallback }
+// 后端 list 项 { id,name,action,environ,env_label,ok,status,time } → 前端记录形状
+function mapItem(kind, it) {
+  return {
+    id: it.id,
+    name: it.name || '',
+    action: it.action || '',
+    env: it.environ || '',
+    envLabel: it.env_label || '',
+    ok: it.ok === 'X' || it.ok === true,
+    status: it.status || '',
+    time: it.time || '',
+    kind,
+  }
 }
-const saveJson = (key, val) => {
-  try { localStorage.setItem(key, JSON.stringify(val)) } catch { /* 超配额等，忽略 */ }
-}
+const bundleKind = (kind) => (kind === 'HIST' ? 'call-history' : 'variant')
 
-// djb2 字符串哈希；id 再拼上长度进一步降低碰撞概率
-function schemaId(schema) {
-  const s = JSON.stringify(schema)
-  let h = 5381
-  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0
-  return `s${h.toString(36)}_${s.length}`
-}
-// 从 id 前缀解析时间戳（用于导入合并后按时间倒序）
-const tsOf = (id) => {
-  const n = parseInt(String(id).split('-')[0], 10)
-  return Number.isFinite(n) ? n : 0
-}
+export function useRecordStore({ kind, getAuth }) {
+  const [records, setRecords] = useState([])
+  const [loading, setLoading] = useState(false)
 
-/**
- * @param {object} opts
- *   recordsKey  localStorage 记录列表键
- *   poolKey     localStorage schema 池键
- *   limit       记录条数上限
- *   kind        导出/导入的 bundle 类型标识（也用于校验导入文件）
- *   listField   bundle 里存放记录数组的字段名（历史用 'history'，变式用 'variants'）
- */
-export function useRecordStore({ recordsKey, poolKey, limit, kind, listField }) {
-  const [records, setRecords] = useState(() => loadJson(recordsKey, []))
-  const poolRef = useRef(loadJson(poolKey, {}))
-
-  const savePool = () => saveJson(poolKey, poolRef.current)
-  // 清掉池里不再被任何记录引用的 schema，避免池无限增长
-  const prunePool = (list) => {
-    const used = new Set(list.map((r) => r.schemaId).filter(Boolean))
-    for (const k of Object.keys(poolRef.current)) if (!used.has(k)) delete poolRef.current[k]
-    savePool()
-  }
-
-  // 新增一条记录：schema 去重存池，记录只留 schemaId。
-  // fields 里的 schema 字段会被抽出入池；其余字段原样进记录。返回生成的 id。
-  const add = ({ schema, ...fields }) => {
-    const sid = schemaId(schema)
-    if (!poolRef.current[sid]) poolRef.current[sid] = schema
-    const id = `${new Date().getTime()}-${records.length}`
-    const entry = { id, time: new Date().toLocaleString('zh-CN'), schemaId: sid, ...fields }
-    setRecords((prev) => {
-      const next = [entry, ...prev].slice(0, limit)
-      saveJson(recordsKey, next)
-      prunePool(next)
-      return next
-    })
-    return id
-  }
-
-  const remove = (id) => {
-    setRecords((prev) => {
-      const next = prev.filter((r) => r.id !== id)
-      saveJson(recordsKey, next)
-      prunePool(next)
-      return next
-    })
-  }
-
-  // 就地更新一条记录的业务字段（如重命名 name）。不涉及 schema 池，故不 prune。
-  const update = (id, patch) => {
-    setRecords((prev) => {
-      const next = prev.map((r) => (r.id === id ? { ...r, ...patch } : r))
-      saveJson(recordsKey, next)
-      return next
-    })
-  }
-
-  const clear = () => {
-    setRecords([])
-    saveJson(recordsKey, [])
-    poolRef.current = {}
-    savePool()
-  }
-
-  // 取记录对应的 schema：新记录从池里按 schemaId 取，旧记录仍内联 rec.schema；都无返回 null
-  const getSchema = (rec) => rec.schema || poolRef.current[rec.schemaId] || null
-
-  // 导出打包：记录 + 它们引用的 schema（只带被引用的，避免把整份池导出）。
-  // list 缺省=全部；传入子集（如 [rec]）即可只导出选中的那一条。
-  const exportBundle = (list = records) => {
-    const schemas = {}
-    for (const r of list) {
-      if (r.schemaId && poolRef.current[r.schemaId]) schemas[r.schemaId] = poolRef.current[r.schemaId]
+  // 拉取列表（弹窗打开 / 变更后调用）
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    try {
+      const list = await api.recList(kind, getAuth())
+      setRecords(Array.isArray(list) ? list.map((it) => mapItem(kind, it)) : [])
+    } finally {
+      setLoading(false)
     }
-    return {
-      app: 'formily-demo',
+  }, [kind, getAuth])
+
+  // 新增/保存一条：fields = { rec_name, action, env, envLabel, ok, status, schema, values, config, body }
+  // schema/values/config/body 合并成 payload 一个 JSON 字符串存入后端 PAYLOAD_JSON。
+  const add = async (fields) => {
+    const payloadObj = {
+      schema: fields.schema ?? null,
+      values: fields.values ?? {},
+      config: fields.config ?? {},
+    }
+    if (fields.body !== undefined) payloadObj.body = fields.body
+    const res = await api.recSave({
       kind,
-      version: 1,
-      exportedAt: new Date().toLocaleString('zh-CN'),
-      count: list.length,
-      [listField]: list,
-      schemas,
-    }
+      rec_name: fields.rec_name ?? '',
+      action: fields.action ?? '',
+      environ: fields.env ?? '',
+      env_label: fields.envLabel ?? '',
+      ok_flag: fields.ok ? 'X' : '',
+      status: fields.status != null ? String(fields.status) : '',
+      payload: JSON.stringify(payloadObj),
+    }, getAuth())
+    return res?.rec_id
   }
 
-  // 导入合并：并入现有记录（按 id 去重，schema 并回池，按时间倒序截断到上限）。
-  // 非破坏性——已有记录不丢；返回新增条数。格式不对则抛错。
-  const importBundle = (data) => {
-    const incoming = data && Array.isArray(data[listField]) ? data[listField] : null
-    if (!data || data.kind !== kind || !incoming) {
-      throw new Error('文件格式不对（不是本工具导出的对应类型文件）')
+  const rename = (id, name) => api.recRename(id, name, getAuth())
+  const remove = (id) => api.recDelete(id, getAuth())
+  const clear = () => api.recClear(kind, getAuth())
+  const getFull = (id) => api.recGet(id, getAuth()) // → { schema, values, config, body }
+
+  // 导出：拉全量（含 payload）打成自包含 bundle
+  const exportAll = async () => {
+    const out = []
+    for (const r of records) {
+      const payload = await getFull(r.id)
+      out.push({ ...r, payload })
     }
-    const incomingSchemas = data.schemas && typeof data.schemas === 'object' ? data.schemas : {}
+    return { app: 'sap-invoker', kind: bundleKind(kind), version: 2, records: out }
+  }
+  const exportOne = async (rec) => {
+    const payload = await getFull(rec.id)
+    return { app: 'sap-invoker', kind: bundleKind(kind), version: 2, records: [{ ...rec, payload }] }
+  }
+
+  // 导入：逐条 recSave 成自己的新记录。兼容旧 localStorage 导出格式（history/variants + schemas 池）。
+  const importBundle = async (data) => {
+    let list = null
+    if (Array.isArray(data?.records)) {
+      list = data.records.map((r) => ({ ...r, payload: r.payload || {} }))
+    } else if (Array.isArray(data?.history) || Array.isArray(data?.variants)) {
+      const legacy = data.history || data.variants
+      const pool = data.schemas || {}
+      list = legacy.map((r) => ({
+        name: r.name, action: r.action, env: r.env, envLabel: r.envLabel, ok: r.ok, status: r.status,
+        payload: {
+          schema: r.schema || pool[r.schemaId] || null,
+          values: r.values || {},
+          config: r.config || {},
+          ...(r.body !== undefined ? { body: r.body } : {}),
+        },
+      }))
+    }
+    if (!list) throw new Error('文件格式不对（不是本工具导出的文件）')
+
     let added = 0
-    setRecords((prev) => {
-      const existingIds = new Set(prev.map((r) => r.id))
-      const fresh = incoming.filter((r) => r && r.id && !existingIds.has(r.id))
-      added = fresh.length
-      for (const [k, v] of Object.entries(incomingSchemas)) {
-        if (!poolRef.current[k]) poolRef.current[k] = v // 池里已有则不覆盖
-      }
-      const merged = [...fresh, ...prev].sort((a, b) => tsOf(b.id) - tsOf(a.id)).slice(0, limit)
-      saveJson(recordsKey, merged)
-      prunePool(merged)
-      return merged
-    })
+    for (const r of list) {
+      await add({
+        rec_name: r.name || '', action: r.action, env: r.env, envLabel: r.envLabel,
+        ok: r.ok, status: r.status,
+        schema: r.payload?.schema, values: r.payload?.values, config: r.payload?.config, body: r.payload?.body,
+      })
+      added++
+    }
+    await refresh()
     return added
   }
 
-  return { records, add, remove, update, clear, getSchema, exportBundle, importBundle }
+  return { records, loading, refresh, add, rename, remove, clear, getFull, exportAll, exportOne, importBundle }
 }

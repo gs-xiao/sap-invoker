@@ -1,33 +1,24 @@
-// 调用记录 hook：提交后自动记录一次调用，用 localStorage 持久化。
-// 底层复用 useRecordStore（Schema 去重池 + 打包导出/导入）；这里只加「组装一条调用记录」的语义。
-// 导出 bundle 的 kind='call-history'、列表字段='history'，与历史导出文件格式保持兼容。
-import { STORAGE } from '../config'
+// 调用记录 hook（kind='HIST'）：底层复用 SAP 后端存储 useRecordStore。
+// getAuth 由 App 传入（返回 { env, username, password }），供底层调接口时取当前认证参数。
 import { useRecordStore } from './useRecordStore'
 
-const { historyKey, historyLimit, schemaPoolKey } = STORAGE
-
-export function useCallHistory() {
-  const store = useRecordStore({
-    recordsKey: historyKey,
-    poolKey: schemaPoolKey,
-    limit: historyLimit,
-    kind: 'call-history',
-    listField: 'history',
-  })
-
-  // 组装并保存一条调用记录（schema 去重存池，恢复时按引用取回）。body=接口返回消息，全量存。
-  const recordCall = ({ applied, values, ok, status, env, envLabel, action, config, body }) => {
-    store.add({ schema: applied, env, envLabel, action, config, values, ok, status, body })
-  }
-
+export function useCallHistory(getAuth) {
+  const s = useRecordStore({ kind: 'HIST', getAuth })
   return {
-    history: store.records,
-    recordCall,
-    renameCall: (id, name) => store.update(id, { name }), // 重命名一条调用记录
-    deleteHistory: store.remove,
-    clearHistory: store.clear,
-    getSchema: store.getSchema,
-    exportBundle: store.exportBundle,
-    importBundle: store.importBundle,
+    history: s.records,
+    loading: s.loading,
+    refresh: s.refresh,
+    // 提交后记一条：f = { applied(=schema), values, config, body, ok, status, env, envLabel, action }
+    recordCall: (f) => s.add({
+      schema: f.applied, values: f.values, config: f.config, body: f.body,
+      ok: f.ok, status: f.status, env: f.env, envLabel: f.envLabel, action: f.action, rec_name: '',
+    }),
+    renameCall: (id, name) => s.rename(id, name),
+    deleteHistory: s.remove,
+    clearHistory: s.clear,
+    getFull: s.getFull,
+    exportAll: s.exportAll,
+    exportOne: s.exportOne,
+    importBundle: s.importBundle,
   }
 }

@@ -27,6 +27,7 @@ export const ENVIRONMENTS = import.meta.env?.DEV
 export const SAP = {
   metadataAction: 'Z_INVOKER_META', // 返回元数据的服务 action（不对用户开放修改）
   metadataAiAction: 'Z_INVOKER_META_AI', // AI 方式返回元数据的服务 action（入参/出参同上）
+  storeAction: 'Z_INVOKER_STORE',   // 调用记录/变式/分享 存储入口（按 body.op 分派）
   metadataFuncKey: 'func_name',                // 获取元数据时请求体里「目标函数名」的字段名
   defaultFuncName: 'Z_SRM_CREATE_PO',          // 目标 FM 函数名的默认值
 }
@@ -34,13 +35,13 @@ export const SAP = {
 // ---- 3) localStorage 持久化的键名与上限 ----
 export const STORAGE = {
   historyKey: 'formily-demo:call-history',
-  historyLimit: 100,
+  historyLimit: 200,
   schemaPoolKey: 'formily-demo:schema-pool',
   visProfileKey: 'formily-demo:visibility-profiles',
   visProfileLimit: 100,
   // 变式（手动保存的命名表单状态：值 + Schema + 显隐配置）
   variantKey: 'formily-demo:variants',
-  variantLimit: 100,
+  variantLimit: 200,
   variantPoolKey: 'formily-demo:variant-schema-pool',
 }
 

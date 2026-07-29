@@ -5,8 +5,8 @@ import React, { useRef, useState } from 'react'
 import { Modal, Space, Button, List, Input as AntInput } from 'antd'
 
 export default function VariantModal({
-  open, onClose, variants, limit, canSave,
-  onSave, onRestore, onDelete, onClear, onExport, onExportOne, onImportFile,
+  open, onClose, variants, limit, canSave, loading,
+  onSave, onRestore, onShare, onDelete, onClear, onExport, onExportOne, onImportFile,
 }) {
   const fileRef = useRef(null)
   const [name, setName] = useState('')
@@ -65,6 +65,7 @@ export default function VariantModal({
 
       <List
         size="small"
+        loading={loading}
         locale={{ emptyText: '暂无变式，填好表单后在上方起名保存' }}
         dataSource={variants}
         style={{ maxHeight: '55vh', overflow: 'auto' }}
@@ -72,6 +73,7 @@ export default function VariantModal({
           <List.Item
             actions={[
               <Button type="link" key="fill" onClick={() => onRestore(rec)}>填充</Button>,
+              <Button type="link" key="share" onClick={() => onShare(rec)}>分享</Button>,
               <Button type="link" key="dl" onClick={() => onExportOne(rec)}>下载</Button>,
               <Button type="link" danger key="del" onClick={() => onDelete(rec.id)}>删除</Button>,
             ]}

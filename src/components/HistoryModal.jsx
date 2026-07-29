@@ -3,7 +3,7 @@
 import React, { useRef, useState } from 'react'
 import { Modal, Space, Button, List, Tag, Input } from 'antd'
 
-export default function HistoryModal({ open, onClose, history, limit, onRestore, onRename, onViewBody, onDelete, onClear, onExport, onExportOne, onImportFile }) {
+export default function HistoryModal({ open, onClose, history, limit, loading, onRestore, onRename, onViewBody, onShare, onDelete, onClear, onExport, onExportOne, onImportFile }) {
   const fileRef = useRef(null)
   const [editingId, setEditingId] = useState(null) // 正在重命名的记录 id
   const [draftName, setDraftName] = useState('')
@@ -47,6 +47,7 @@ export default function HistoryModal({ open, onClose, history, limit, onRestore,
       />
       <List
         size="small"
+        loading={loading}
         locale={{ emptyText: '暂无调用记录，提交一次后会自动记录' }}
         dataSource={history}
         style={{ maxHeight: '60vh', overflow: 'auto' }}
@@ -63,6 +64,7 @@ export default function HistoryModal({ open, onClose, history, limit, onRestore,
                   : [
                       <Button type="link" key="fill" onClick={() => onRestore(rec)}>填充</Button>,
                       <Button type="link" key="view" onClick={() => onViewBody(rec)}>查看返回</Button>,
+                      <Button type="link" key="share" onClick={() => onShare(rec)}>分享</Button>,
                       <Button type="link" key="rename" onClick={() => startRename(rec)}>重命名</Button>,
                       <Button type="link" key="dl" onClick={() => onExportOne(rec)}>下载</Button>,
                       <Button type="link" danger key="del" onClick={() => onDelete(rec.id)}>删除</Button>,
