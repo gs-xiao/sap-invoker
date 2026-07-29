@@ -5,6 +5,6 @@
 // 前端请求走代理前缀（/sap-dev、/sap-test），由 Vite 转发到下面的 target，绕开浏览器 CORS。
 // 前缀本身在 src/config.js 的 ENVIRONMENTS 里拼路径时使用，二者的 key 要对应。
 export const PROXY_TARGETS = {
-  '/sap-dev': 'http://devapp.vision-tool.com.cn:8400',
-  '/sap-test': 'http://devapp.vision-tool.com.cn:8010',
+  '/sap-dev': 'http://172.18.1.10:8400',
+  '/sap-test': 'http://172.18.1.10:8010',
 }
