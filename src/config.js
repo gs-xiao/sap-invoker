@@ -25,8 +25,8 @@ export const ENVIRONMENTS = import.meta.env?.DEV
 
 // ---- 2) SAP 服务相关固定值 ----
 export const SAP = {
-  metadataAction: 'ZTEST_FUNCTION_VALUE_DATA', // 返回元数据的服务 action（不对用户开放修改）
-  metadataAiAction: 'ZTEST_FUNCTION_VALUE_DATA_AI', // AI 方式返回元数据的服务 action（入参/出参同上）
+  metadataAction: 'Z_INVOKER_META', // 返回元数据的服务 action（不对用户开放修改）
+  metadataAiAction: 'Z_INVOKER_META_AI', // AI 方式返回元数据的服务 action（入参/出参同上）
   metadataFuncKey: 'func_name',                // 获取元数据时请求体里「目标函数名」的字段名
   defaultFuncName: 'Z_SRM_CREATE_PO',          // 目标 FM 函数名的默认值
 }

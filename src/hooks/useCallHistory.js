@@ -15,14 +15,15 @@ export function useCallHistory() {
     listField: 'history',
   })
 
-  // 组装并保存一条调用记录（schema 去重存池，恢复时按引用取回）
-  const recordCall = ({ applied, values, ok, status, env, envLabel, action, config }) => {
-    store.add({ schema: applied, env, envLabel, action, config, values, ok, status })
+  // 组装并保存一条调用记录（schema 去重存池，恢复时按引用取回）。body=接口返回消息，全量存。
+  const recordCall = ({ applied, values, ok, status, env, envLabel, action, config, body }) => {
+    store.add({ schema: applied, env, envLabel, action, config, values, ok, status, body })
   }
 
   return {
     history: store.records,
     recordCall,
+    renameCall: (id, name) => store.update(id, { name }), // 重命名一条调用记录
     deleteHistory: store.remove,
     clearHistory: store.clear,
     getSchema: store.getSchema,

@@ -71,6 +71,15 @@ export function useRecordStore({ recordsKey, poolKey, limit, kind, listField }) 
     })
   }
 
+  // 就地更新一条记录的业务字段（如重命名 name）。不涉及 schema 池，故不 prune。
+  const update = (id, patch) => {
+    setRecords((prev) => {
+      const next = prev.map((r) => (r.id === id ? { ...r, ...patch } : r))
+      saveJson(recordsKey, next)
+      return next
+    })
+  }
+
   const clear = () => {
     setRecords([])
     saveJson(recordsKey, [])
@@ -123,5 +132,5 @@ export function useRecordStore({ recordsKey, poolKey, limit, kind, listField }) 
     return added
   }
 
-  return { records, add, remove, clear, getSchema, exportBundle, importBundle }
+  return { records, add, remove, update, clear, getSchema, exportBundle, importBundle }
 }

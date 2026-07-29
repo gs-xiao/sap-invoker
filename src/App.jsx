@@ -36,7 +36,7 @@ export default function App() {
   } = useDynamicForm()
 
   // 调用记录 & 变式 & 显隐方案三套持久化
-  const { history, recordCall, deleteHistory, clearHistory, getSchema, exportBundle, importBundle } = useCallHistory()
+  const { history, recordCall, renameCall, deleteHistory, clearHistory, getSchema, exportBundle, importBundle } = useCallHistory()
   const {
     variants, saveVariant, deleteVariant, clearVariants,
     getSchema: getVariantSchema, exportBundle: exportVariants, importBundle: importVariants,
@@ -216,6 +216,15 @@ export default function App() {
   const onDeleteHistory = (id) => { deleteHistory(id); message.success('已删除该记录') }
   const onClearHistory = () => { clearHistory(); message.success('已清空调用记录') }
 
+  // 重命名一条调用记录（给记录起个好记的名字，不影响填充/导出）
+  const onRenameHistory = (id, name) => { renameCall(id, name.trim()); message.success('已重命名') }
+
+  // 查看某条记录当时的接口返回消息（复用结果弹窗）
+  const onViewHistoryBody = (rec) => {
+    setResult({ ok: rec.ok, status: rec.status, body: rec.body ?? '（该记录未存返回消息）' })
+    setResultOpen(true)
+  }
+
   // 下载调用记录（含引用的 Schema）为 JSON，分享给别人
   const onExportHistory = () => {
     if (!history.length) { message.warning('暂无调用记录可下载'); return }
@@ -305,14 +314,14 @@ export default function App() {
       const res = await submitCall({ env, username, password, action, payload })
       setResult(res)
       setResultOpen(true)
-      recordCall({ applied, values: payload, ok: res.ok, status: res.status, env, envLabel: ENVIRONMENTS[env].label, action, config })
+      recordCall({ applied, values: payload, ok: res.ok, status: res.status, env, envLabel: ENVIRONMENTS[env].label, action, config, body: res.body })
       if (res.ok) message.success('调用成功')
       else message.error(`接口返回 HTTP ${res.status}`)
     } catch (e) {
       // 网络错误 / CORS 拦截通常走这里
       setResult({ ok: false, status: '请求失败', body: String(e) })
       setResultOpen(true)
-      recordCall({ applied, values: payload, ok: false, status: '请求失败', env, envLabel: ENVIRONMENTS[env].label, action, config })
+      recordCall({ applied, values: payload, ok: false, status: '请求失败', env, envLabel: ENVIRONMENTS[env].label, action, config, body: String(e) })
       message.error('请求失败：' + e.message)
     }
   }
@@ -510,6 +519,8 @@ export default function App() {
           history={history}
           limit={STORAGE.historyLimit}
           onRestore={restoreFromHistory}
+          onRename={onRenameHistory}
+          onViewBody={onViewHistoryBody}
           onDelete={onDeleteHistory}
           onClear={onClearHistory}
           onExport={onExportHistory}
