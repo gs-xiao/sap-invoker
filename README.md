@@ -13,12 +13,27 @@ npm run dev
 
 浏览器自动打开 http://localhost:5173
 
+## 配置 / 换一套 SAP 系统
+
+跟 SAP 相关的可变配置（代理目标主机、ICF 服务名、client、action 名）全部集中在根目录 **`.env`**。
+
+```bash
+cp .env .env.local   # 只留要改的行，其余自动沿用 .env 默认值
+npm run dev          # env 只在启动时读一次，改完必须重启
+```
+
+- `.env` —— 项目默认值，**进 git**，clone 下来就能跑。
+- `.env.local` —— 本机覆盖，**已被 .gitignore 忽略**，不会上传、不影响别人。Vite 先读 `.env` 再读 `.env.local`，同名 key 以后者为准。
+- 变量分两类：`SAP_*_TARGET` 是 node 端读的代理目标主机（`vite.config.js` 扫描它们自动生成代理，`SAP_DEV_TARGET` → `/sap-dev`）；`VITE_*` 才会被打进前端包、浏览器里能读到。
+- 其中「服务名」= SAP 事务码 SICF 里那个 HTTP 服务节点名，也就是直连地址 `http://<主机>:<端口>/<服务名>` 的最后一段。
+
 ## 目录结构
 
 ```
-sap.config.js              构建期：Vite 开发代理的目标 SAP 主机（改代理指向只改这里）
+.env                       SAP 相关配置（代理主机 / ICF 服务名 / client / action 名），换系统只改这里
+vite.config.js             构建期：按 .env 的 SAP_*_TARGET 自动生成开发代理
 src/
-  config.js                运行时：环境地址、元数据服务名、localStorage 上限、栅格列数
+  config.js                运行时：读 .env 拼环境地址与服务名 + localStorage 上限、栅格列数
   App.jsx                  布局骨架 + 组装 hooks/Modal
   metadataToSchema.js      中性元数据 → Formily Schema（叶子进 FormGrid 栅格）
   visibility.js            字段显隐纯逻辑（对 FormGrid void 节点透传，路径不变）

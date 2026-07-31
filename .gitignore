@@ -8,10 +8,9 @@ dist/
 *.log
 
 # 环境变量
-.env
+# .env = 项目默认值，要进 git（人人 clone 下来就能跑），故不在忽略之列。
+# 换系统时 cp .env .env.local 改值 —— .env.local 等本机覆盖文件一律不进 git。
 .env.*
-# 但模板文件要进 git（给其它设备照抄），真正的 .env.local 仍被上面忽略
-!.env.local.example
 
 # IDE
 .vscode/
