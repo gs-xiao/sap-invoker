@@ -37,7 +37,9 @@ export default function App() {
   } = useDynamicForm()
 
   // 接口认证参数（元数据、提交调用、记录/变式/分享 存储 API 都复用）
-  const [env, setEnv] = useState('dev')
+  // 本地开发默认连开发环境；部署到 BSP 后环境选择器会隐藏，应明确标记为生产环境，
+  // 避免调用记录虽然走生产服务，却被保存成 env=dev / “开发”。
+  const [env, setEnv] = useState(IS_DEV ? 'dev' : 'prod')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const getAuth = useCallback(() => ({ env, username, password }), [env, username, password])
