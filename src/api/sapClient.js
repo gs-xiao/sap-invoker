@@ -3,7 +3,7 @@
 import { ENVIRONMENTS, SAP } from '../config'
 
 // 拼接调用地址：baseUrl 已带 ? 参数时用 &，否则用 ? 起头，避免 zpub_api&action=… 的错误
-export function buildActionUrl(baseUrl, action) {
+function buildActionUrl(baseUrl, action) {
   const sep = baseUrl.includes('?') ? '&' : '?'
   return `${baseUrl}${sep}action=${encodeURIComponent(action)}`
 }

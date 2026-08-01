@@ -5,7 +5,7 @@ import React, { useRef, useState } from 'react'
 import { Modal, Space, Button, List, Input as AntInput } from 'antd'
 
 export default function VariantModal({
-  open, onClose, variants, limit, canSave, loading,
+  open, onClose, variants, canSave, loading,
   onSave, onRestore, onShare, onDelete, onClear, onExport, onExportOne, onImportFile,
 }) {
   const fileRef = useRef(null)
@@ -17,16 +17,16 @@ export default function VariantModal({
     e.target.value = ''
   }
 
-  const handleSave = () => {
+  // 保存成功才清空输入框：重名弹窗里选了「取消」时，用户刚敲的名字要留着
+  const handleSave = async () => {
     const trimmed = name.trim()
     if (!trimmed) return
-    onSave(trimmed)
-    setName('')
+    if (await onSave(trimmed)) setName('')
   }
 
   return (
     <Modal
-      title={`变式（已存 ${variants.length}，最多 ${limit}）`}
+      title={`变式（已存 ${variants.length}）`}
       open={open}
       onCancel={onClose}
       footer={

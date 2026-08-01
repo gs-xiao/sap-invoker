@@ -276,27 +276,6 @@ function buildField(node) {
   }
 }
 
-// 一组子节点 → properties 对象（key = 字段名）
-// 去重：同一层若出现重名字段（元数据里同名 node 重复出现），只保留第一个、跳过其余，
-// 并告警。注意——这只能挡「完全同名」的重复；像 IS_HEADDATA / HEADDATA / headdata
-// 这种「同一批字段的不同命名」是不同 key，无法在此自动判定谁是规范名，需在后端元数据源头修。
-function childrenToProperties(nodes) {
-  const props = {}
-  const seen = new Set()
-  nodes.forEach((node, i) => {
-    const key = node.name || `field${i}`
-    if (seen.has(key)) {
-      if (typeof console !== 'undefined') {
-        console.warn(`[metadataToSchema] 跳过同层重名字段：${key}`)
-      }
-      return
-    }
-    seen.add(key)
-    props[key] = buildField(node)
-  })
-  return props
-}
-
 // 是否为叶子字段（进栅格）：STRUCTURE/TABLE 是容器（整行独立），其余按叶子处理
 function isLeafKind(node) {
   const k = (node.kind || 'ELEM').toUpperCase()
@@ -306,7 +285,11 @@ function isLeafKind(node) {
 // 一组子节点 → properties，并做「栅格分组」：把连续的叶子字段收进一个 FormGrid void 节点
 // （键名 _gridN），STRUCTURE/TABLE 容器作为整行独立兄弟直接输出、不进栅格。
 // FormGrid 是无数据的 void 容器，不占字段路径 —— visibility.js 会透传它，故显隐配置路径不变。
-// 供 buildStructure 与顶层入口使用；折叠面板/表格单元格仍走 childrenToProperties（不分组）。
+// 供 buildStructure / buildCollapse / 顶层入口使用；表格单元格由 buildTable 自行组装（不分组）。
+//
+// 去重：同一层若出现重名字段（元数据里同名 node 重复出现），只保留第一个、跳过其余，
+// 并告警。注意——这只能挡「完全同名」的重复；像 IS_HEADDATA / HEADDATA / headdata
+// 这种「同一批字段的不同命名」是不同 key，无法在此自动判定谁是规范名，需在后端元数据源头修。
 function layoutProperties(nodes) {
   const props = {}
   const seen = new Set()

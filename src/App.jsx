@@ -303,12 +303,33 @@ export default function App() {
 
   // ---- 变式（命名的表单状态：值 + Schema + 显隐配置）----
 
+  // 重名时问一次要不要覆盖。后端没有「按名 upsert」的 op，只能删旧+插新；
+  // 顺序是先插后删——中途失败最多留下两条同名（用户可自行删掉），不会把旧变式弄丢。
   const onSaveVariant = async (name) => {
+    const dup = variants.find((v) => (v.name || '').trim() === name)
+    if (dup) {
+      const confirmed = await new Promise((resolve) => {
+        Modal.confirm({
+          title: '变式重名',
+          content: `已存在同名变式「${name}」，覆盖后旧的那条会被删除。`,
+          okText: '覆盖',
+          okButtonProps: { danger: true },
+          cancelText: '取消',
+          onOk: () => resolve(true),
+          onCancel: () => resolve(false),
+        })
+      })
+      if (!confirmed) return false
+    }
     try {
       await saveVariant({ name, applied, values: stripInternalKeys(form.values ?? {}), config, action: metaFuncName.trim() })
-      await refreshVariants()
-      message.success(`已保存变式「${name}」`)
-    } catch (e) { message.error('保存失败：' + e.message) }
+      if (dup) {
+        await deleteVariant(dup.id)
+        await refreshVariants() // deleteVariant 不自带刷新（不像 saveVariant）
+      }
+      message.success(dup ? `已覆盖变式「${name}」` : `已保存变式「${name}」`)
+      return true // 告诉弹窗可以清空输入框了
+    } catch (e) { message.error('保存失败：' + e.message); return false }
   }
 
   const restoreVariant = async (rec) => {
@@ -618,7 +639,6 @@ export default function App() {
           onClose={() => setHistoryOpen(false)}
           history={history}
           loading={historyLoading}
-          limit={STORAGE.historyLimit}
           onRestore={restoreFromHistory}
           onRename={onRenameHistory}
           onViewBody={onViewHistoryBody}
@@ -635,7 +655,6 @@ export default function App() {
           onClose={() => setVariantOpen(false)}
           variants={variants}
           loading={variantLoading}
-          limit={STORAGE.variantLimit}
           canSave={hasForm}
           onSave={onSaveVariant}
           onRestore={restoreVariant}

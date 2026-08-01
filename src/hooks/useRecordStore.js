@@ -39,7 +39,8 @@ export function useRecordStore({ kind, getAuth }) {
 
   // 新增/保存一条：fields = { rec_name, action, env, envLabel, ok, status, schema, values, config, body }
   // schema/values/config/body 合并成 payload 一个 JSON 字符串存入后端 PAYLOAD_JSON。
-  const add = async (fields) => {
+  // 写完默认自动 refresh()，调用方无需再手动拉列表；批量场景（importBundle）传 skipRefresh 跳过，末尾统一刷一次。
+  const add = async (fields, { skipRefresh = false } = {}) => {
     const payloadObj = {
       schema: fields.schema ?? null,
       values: fields.values ?? {},
@@ -56,6 +57,7 @@ export function useRecordStore({ kind, getAuth }) {
       status: fields.status != null ? String(fields.status) : '',
       payload: JSON.stringify(payloadObj),
     }, getAuth())
+    if (!skipRefresh) await refresh()
     return res?.rec_id
   }
 
@@ -104,7 +106,7 @@ export function useRecordStore({ kind, getAuth }) {
         rec_name: r.name || '', action: r.action, env: r.env, envLabel: r.envLabel,
         ok: r.ok, status: r.status,
         schema: r.payload?.schema, values: r.payload?.values, config: r.payload?.config, body: r.payload?.body,
-      })
+      }, { skipRefresh: true })
       added++
     }
     await refresh()

@@ -53,16 +53,11 @@ export const SAP = {
 }
 
 // ---- 3) localStorage 持久化的键名与上限 ----
+// 调用记录 / 变式已在 3.0.0 迁到 SAP（ZINVOKER_REC 表），不再走 localStorage，也没有条数上限。
+// 只剩显隐方案仍存在浏览器本地，受 5MB 配额限制，故保留 visProfileLimit。
 export const STORAGE = {
-  historyKey: 'formily-demo:call-history',
-  historyLimit: 200,
-  schemaPoolKey: 'formily-demo:schema-pool',
   visProfileKey: 'formily-demo:visibility-profiles',
   visProfileLimit: 100,
-  // 变式（手动保存的命名表单状态：值 + Schema + 显隐配置）
-  variantKey: 'formily-demo:variants',
-  variantLimit: 200,
-  variantPoolKey: 'formily-demo:variant-schema-pool',
 }
 
 // ---- 4) 表单响应式栅格（FormGrid）默认参数 ----

@@ -68,7 +68,7 @@ export function useDynamicForm() {
   }
 
   return {
-    applied, setApplied, config, setConfig,
+    applied, config, setConfig,
     form, renderSchema, treeData, allLeafKeys, checkedKeys,
     applySchema, applySchemaKeepState, restore,
   }

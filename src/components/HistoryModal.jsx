@@ -3,7 +3,7 @@
 import React, { useRef, useState } from 'react'
 import { Modal, Space, Button, List, Tag, Input } from 'antd'
 
-export default function HistoryModal({ open, onClose, history, limit, loading, onRestore, onRename, onViewBody, onShare, onDelete, onClear, onExport, onExportOne, onImportFile }) {
+export default function HistoryModal({ open, onClose, history, loading, onRestore, onRename, onViewBody, onShare, onDelete, onClear, onExport, onExportOne, onImportFile }) {
   const fileRef = useRef(null)
   const [editingId, setEditingId] = useState(null) // 正在重命名的记录 id
   const [draftName, setDraftName] = useState('')
@@ -24,7 +24,7 @@ export default function HistoryModal({ open, onClose, history, limit, loading, o
 
   return (
     <Modal
-      title={`调用记录（最近 ${history.length} 条，最多存 ${limit}）`}
+      title={`调用记录（共 ${history.length} 条）`}
       open={open}
       onCancel={onClose}
       footer={
