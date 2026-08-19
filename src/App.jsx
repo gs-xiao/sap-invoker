@@ -8,7 +8,7 @@ import {
 import zhCN from 'antd/locale/zh_CN'
 import 'antd/dist/reset.css'
 
-import { ENVIRONMENTS, SAP, STORAGE, IS_DEV } from './config'
+import { ENVIRONMENTS, SAP, IS_DEV } from './config'
 import { SchemaField } from './form/schemaField'
 import { BlockCollapseContext } from './form/layout'
 import { metadataToSchema } from './metadataToSchema'
@@ -17,7 +17,6 @@ import { fetchMetadata as apiFetchMetadata, submitCall, store as sapStore } from
 import { useDynamicForm } from './hooks/useDynamicForm'
 import { useCallHistory } from './hooks/useCallHistory'
 import { useVariants } from './hooks/useVariants'
-import { useVisibilityProfiles } from './hooks/useVisibilityProfiles'
 import { downloadJson, timestampName } from './utils/file'
 import MetaModal from './components/MetaModal'
 import DataFillModal from './components/DataFillModal'
@@ -26,7 +25,6 @@ import VariantModal from './components/VariantModal'
 import ShareInboxModal from './components/ShareInboxModal'
 import ResultModal from './components/ResultModal'
 import VisibilityModal from './components/VisibilityModal'
-import ProfileModal from './components/ProfileModal'
 
 export default function App() {
   // 表单生命周期（schema / 显隐 / form 重建 / 派生数据）集中在此 hook
@@ -44,7 +42,7 @@ export default function App() {
   const [password, setPassword] = useState('')
   const getAuth = useCallback(() => ({ env, username, password }), [env, username, password])
 
-  // 调用记录 & 变式（SAP 后端存储，异步）& 显隐方案（仍本地）
+  // 调用记录 & 变式（SAP 后端存储，异步）
   const {
     history, loading: historyLoading, refresh: refreshHistory,
     recordCall, renameCall, deleteHistory, clearHistory, getFull: getHistoryFull,
@@ -55,7 +53,6 @@ export default function App() {
     saveVariant, deleteVariant, clearVariants, getFull: getVariantFull,
     exportAll: exportVariantAll, exportOne: exportVariantOne, importBundle: importVariants,
   } = useVariants(getAuth)
-  const { profiles, saveProfile, deleteProfile, clearProfiles } = useVisibilityProfiles()
 
   // 「分享给我的」收件箱
   const [inboxOpen, setInboxOpen] = useState(false)
@@ -108,7 +105,6 @@ export default function App() {
   const [visView, setVisView] = useState('tree')    // 'tree' | 'json'
   const [visJsonText, setVisJsonText] = useState('') // JSON 视图文本
   const [visJsonError, setVisJsonError] = useState('')
-  const [profileOpen, setProfileOpen] = useState(false)
 
   // 是否已有可用表单（applied 里有字段/栅格）
   const hasForm = !!(applied?.properties && Object.keys(applied.properties).length > 0)
@@ -499,18 +495,6 @@ export default function App() {
     }
   }
 
-  const onSaveProfile = () => {
-    saveProfile({ action: metaFuncName.trim(), config })
-    message.success('已保存配置方案')
-  }
-  const applyProfile = (rec) => {
-    updateConfig(rec.config || {})
-    setProfileOpen(false)
-    message.success('已应用配置方案')
-  }
-  const onDeleteProfile = (id) => { deleteProfile(id); message.success('已删除该方案') }
-  const onClearProfiles = () => { clearProfiles(); message.success('已清空配置方案') }
-
   return (
     <ConfigProvider locale={zhCN}>
       {/* 纵向 Flex：上=固定工具栏（不随滚动），下=表单滚动区 */}
@@ -722,19 +706,6 @@ export default function App() {
           onApplyHideEmpty={applyHideEmpty}
           onShowAll={() => updateConfig({})}
           onHideAll={() => updateConfig(checkedKeysToConfig([], allLeafKeys))}
-          onSaveProfile={onSaveProfile}
-          onOpenProfiles={() => setProfileOpen(true)}
-          profilesCount={profiles.length}
-        />
-
-        <ProfileModal
-          open={profileOpen}
-          onClose={() => setProfileOpen(false)}
-          profiles={profiles}
-          limit={STORAGE.visProfileLimit}
-          onApply={applyProfile}
-          onDelete={onDeleteProfile}
-          onClear={onClearProfiles}
         />
       </div>
     </ConfigProvider>

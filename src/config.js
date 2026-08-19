@@ -2,7 +2,7 @@
 //
 // 跟 SAP 系统有关的值（ICF 服务名、client、action 名）全部来自根目录的 .env；
 // 换一套系统只要复制 .env 为 .env.local 改值即可（.env.local 不进 git），不用动本文件。
-// localStorage 上限、栅格列数这类与 SAP 无关的参数仍直接写在下面。
+// 栅格列数这类与 SAP 无关的参数仍直接写在下面。
 //
 // 注意：
 //  · 只有 VITE_ 前缀的变量才会被打进前端包，浏览器里能读到；不带前缀的（如 SAP_DEV_TARGET）
@@ -52,15 +52,7 @@ export const SAP = {
   defaultFuncName: need('VITE_SAP_DEFAULT_FUNC'),    // 目标 FM 函数名的默认值
 }
 
-// ---- 3) localStorage 持久化的键名与上限 ----
-// 调用记录 / 变式已在 3.0.0 迁到 SAP（ZINVOKER_REC 表），不再走 localStorage，也没有条数上限。
-// 只剩显隐方案仍存在浏览器本地，受 5MB 配额限制，故保留 visProfileLimit。
-export const STORAGE = {
-  visProfileKey: 'formily-demo:visibility-profiles',
-  visProfileLimit: 100,
-}
-
-// ---- 4) 表单响应式栅格（FormGrid）默认参数 ----
+// ---- 3) 表单响应式栅格（FormGrid）默认参数 ----
 // metadataToSchema 生成叶子字段栅格时读取；minWidth 优先于 minColumns 决定实际列数。
 export const GRID = {
   minColumns: 1,

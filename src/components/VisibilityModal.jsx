@@ -1,4 +1,5 @@
-// 字段显隐配置弹窗：勾选树 / JSON 两种视图；底部快捷动作（隐藏空值、全显/全隐、存方案）。
+// 字段显隐配置弹窗：勾选树 / JSON 两种视图；底部快捷动作（隐藏空值、全显/全隐）。
+// 显隐配置本身不单独持久化——调好后连同值与布局一起存成「变式」即可复用。
 import React from 'react'
 import { Modal, Space, Button, Select as AntSelect, Tree, Alert } from 'antd'
 
@@ -8,7 +9,6 @@ export default function VisibilityModal({
   visView, setVisView, config,
   visJsonText, setVisJsonText, visJsonError, onApplyJson,
   onApplyHideEmpty, onShowAll, onHideAll,
-  onSaveProfile, onOpenProfiles, profilesCount,
 }) {
   return (
     <Modal
@@ -21,8 +21,6 @@ export default function VisibilityModal({
           <Button onClick={onApplyHideEmpty}>隐藏空值（按当前数据）</Button>
           <Button onClick={onShowAll}>全部显示</Button>
           <Button onClick={onHideAll}>全部隐藏</Button>
-          <Button type="primary" onClick={onSaveProfile}>保存配置</Button>
-          <Button onClick={onOpenProfiles}>配置记录（{profilesCount}）</Button>
           <Button onClick={onClose}>关闭</Button>
         </Space>
       }

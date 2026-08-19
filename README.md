@@ -33,7 +33,7 @@ npm run dev          # env 只在启动时读一次，改完必须重启
 .env                       SAP 相关配置（代理主机 / ICF 服务名 / client / action 名），换系统只改这里
 vite.config.js             构建期：按 .env 的 SAP_*_TARGET 自动生成开发代理
 src/
-  config.js                运行时：读 .env 拼环境地址与服务名 + 显隐方案上限、栅格列数
+  config.js                运行时：读 .env 拼环境地址与服务名 + 栅格列数
   App.jsx                  布局骨架 + 组装 hooks/Modal
   metadataToSchema.js      中性元数据 → Formily Schema（叶子进 FormGrid 栅格）
   visibility.js            字段显隐纯逻辑（对 FormGrid void 节点透传，路径不变）
@@ -46,9 +46,8 @@ src/
     useDynamicForm.js      schema/显隐/form 重建 + 派生数据
     useRecordStore.js      SAP 后端存储底座（ZINVOKER_REC 表），下面两个 hook 共用
     useCallHistory.js      调用记录（kind='HIST'）
-    useVariants.js         变式：命名的表单状态（kind='VAR'）
-    useVisibilityProfiles.js  显隐方案持久化（仍走 localStorage）
-  components/*Modal.jsx    各弹窗（元数据/填充/记录/变式/收件箱/结果/显隐/方案）
+    useVariants.js         变式：命名的表单状态（kind='VAR'，含显隐配置）
+  components/*Modal.jsx    各弹窗（元数据/填充/记录/变式/收件箱/结果/显隐）
 ```
 
 ## 布局
