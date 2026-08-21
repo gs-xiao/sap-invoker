@@ -13,6 +13,8 @@
 // 只存被隐藏的叶子（false），所以「缺失 key = 显示」——别人分享的方案套到不同 schema
 // 上，未知字段安全无视，永不报错。分组用对象表示；手写 JSON 时 "GROUP": false 也支持整组隐藏。
 
+import { stripTechName } from './techName'
+
 // ArrayTable/ArrayCollapse 里的结构性 key，非业务字段，遍历时一律跳过
 const SKIP_KEYS = new Set(['add', 'c_remove', 'c_index', 'remove'])
 
@@ -100,8 +102,10 @@ export function buildTreeData(applied) {
       }
 
       const path = prefix ? `${prefix}.${key}` : key
-      // 树上显示「技术名（中文）」，如 PLANT（工厂）；没有中文或中文与技术名相同时只显示技术名
-      const cn = title || node.title
+      // 树上显示「技术名（中文）」，如 PLANT（工厂）；没有中文或中文与技术名相同时只显示技术名。
+      // title 现在已经烘焙成「工厂 (PLANT)」，先把技术名摘掉，否则拼出「PLANT（工厂 (PLANT)）」。
+      // 旧 schema（历史记录/变式里存的）title 是纯中文，stripTechName 原样返回，照旧可读。
+      const cn = stripTechName(title || node.title, key)
       const label = cn && cn !== key ? `${key}（${cn}）` : key
 
       if (isContainer(node)) {
@@ -200,12 +204,19 @@ export function checkedKeysToConfig(checkedLeafKeys, allLeafKeys) {
   return config
 }
 
+// 路径段来自 schema 的字段 key，而 schema 可能来自别人分享/导入的 JSON 文件。
+// 若里面藏一个名为 __proto__ 的节点，cur['__proto__'] 取到的是 Object.prototype
+// （它是对象，会通过下面的类型检查），再往里写就污染了全局原型。这几个 key 在 SAP
+// 字段名里本来也不可能出现，整条路径直接丢弃。
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
 function setNested(obj, path, value) {
   const parts = path.split('.')
+  if (parts.some((p) => UNSAFE_KEYS.has(p))) return
   let cur = obj
   for (let i = 0; i < parts.length - 1; i++) {
     const p = parts[i]
-    if (!cur[p] || typeof cur[p] !== 'object') cur[p] = {}
+    if (!Object.prototype.hasOwnProperty.call(cur, p) || !cur[p] || typeof cur[p] !== 'object') cur[p] = {}
     cur = cur[p]
   }
   cur[parts[parts.length - 1]] = value

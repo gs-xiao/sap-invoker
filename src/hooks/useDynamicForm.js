@@ -1,6 +1,6 @@
 // 动态表单生命周期 hook：管理 applied(schema) / config(显隐)，按需重建 Formily form，
 // 并派生渲染用 schema、显隐树数据、勾选态。把 App 里最绕的一段状态逻辑集中在此。
-import { useMemo, useRef, useState, useDeferredValue } from 'react'
+import { useCallback, useMemo, useRef, useState, useDeferredValue } from 'react'
 import { createForm } from '@formily/core'
 import {
   stripInternalKeys, applyVisibility, buildTreeData, configToCheckedKeys,
@@ -9,6 +9,9 @@ import {
 export function useDynamicForm() {
   const [applied, setApplied] = useState({ type: 'object', properties: {} })
   const [config, setConfig] = useState({}) // 显隐配置：只记录被隐藏的叶子
+  // 上一版 schema，供「这份 Schema 渲染失败了」时退回（见 SchemaErrorBoundary）。
+  // 用 state 而非 ref：canRollback 要能驱动错误卡片上的按钮显隐。
+  const [prevApplied, setPrevApplied] = useState(null)
 
   // 显隐的「重活」（重建/重渲染表单）用 deferred 值驱动 —— 勾选框即时更新 config，
   // React 把昂贵的表单重渲染延后为非阻塞任务，大表单切显隐时勾选不卡（不改显隐机制本身）。
@@ -47,6 +50,7 @@ export function useDynamicForm() {
 
   // 应用新 schema（新表单从「全部显示」起步，不继承上一个 schema 的显隐配置）
   const applySchema = (schema) => {
+    setPrevApplied(applied)
     setApplied(schema)
     setConfig({})
   }
@@ -56,6 +60,7 @@ export function useDynamicForm() {
   // 字段增删安全：新字段默认显示且值为空；被删字段的旧值/旧显隐 key 变成无害残留。
   const applySchemaKeepState = (schema) => {
     pendingRestoreRef.current = stripInternalKeys(formRef.current?.values || {})
+    setPrevApplied(applied)
     setApplied(schema)
     // 不动 config：显隐配置原样保留
   }
@@ -63,13 +68,25 @@ export function useDynamicForm() {
   // 从调用记录恢复：把值暂存到 ref，setApplied/setConfig 触发的重建会直接把值灌进新 form
   const restore = (schema, values, cfg) => {
     pendingRestoreRef.current = values || {}
+    setPrevApplied(applied)
     setApplied(schema)
     setConfig(cfg || {})
   }
+
+  // 退回上一版 schema（渲染崩溃后的逃生口）。已填的值照旧带过去——崩的是渲染，
+  // form 里的数据是好的。退回后就没有更早的版本可退了，清空 prevApplied。
+  // useCallback 是为了引用稳定：它要传给 React.memo 过的 FormPane，每次新建函数会让 memo 失效。
+  const rollback = useCallback(() => {
+    if (!prevApplied) return
+    pendingRestoreRef.current = stripInternalKeys(formRef.current?.values || {})
+    setApplied(prevApplied)
+    setPrevApplied(null)
+  }, [prevApplied])
 
   return {
     applied, config, setConfig,
     form, renderSchema, treeData, allLeafKeys, checkedKeys,
     applySchema, applySchemaKeepState, restore,
+    canRollback: !!prevApplied, rollback,
   }
 }

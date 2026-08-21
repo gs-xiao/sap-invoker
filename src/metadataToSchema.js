@@ -25,11 +25,17 @@
 // 表套表……任意层级都支持。
 
 import { GRID } from './config'
+import { withTechName } from './techName'
 
 // ddic 数值类型
 const NUMERIC_TYPES = new Set(['INT1', 'INT2', 'INT4', 'INT8', 'DEC', 'CURR', 'QUAN', 'FLTP', 'PREC'])
 // ddic 日期类型
 const DATE_TYPES = new Set(['DATS'])
+
+// 字段在界面上的显示名：中文标签后跟技术字段名，如「物料号 (MATNR)」。
+// SAP 顾问排查问题时要的是技术名，业务用户看的是中文，两个都留着。
+// 没给 label（或 label 就是技术名）时只显示技术名。
+const displayTitle = (node) => withTechName(node.label, node.name)
 
 // 取一个节点的子节点（兼容 children/columns/fields/params 几种命名）
 function childrenOf(node) {
@@ -95,7 +101,7 @@ function buildElem(node) {
 
   const schema = {
     type: dataType,
-    title: node.label || node.name,
+    title: displayTitle(node),
     'x-decorator': 'FormItem',
     'x-component': component,
   }
@@ -129,21 +135,36 @@ function buildElem(node) {
 function buildStructure(node) {
   return {
     type: 'object',
-    title: node.label || node.name,
+    title: displayTitle(node),
     'x-component': 'Block',
     properties: layoutProperties(childrenOf(node)),
   }
 }
 
+// 粗估一段列头文字要占多少像素：CJK/全角按 14px 一个，其余按 8px 一个（14px 字号下
+// 的经验值），再加单元格左右 padding。只求「不至于挤到换行」，不求精确。
+function estimateHeaderWidth(text) {
+  let px = 0
+  // 宁可比码位也不写字面量 CJK 区间：0x2E80 以上即 CJK/全角。源码里不留
+  // 依赖文件编码的字符，这文件怎么过一手都不会让正则悄悄失效。
+  for (const ch of String(text)) px += ch.codePointAt(0) > 0x2e7f ? 14 : 8
+  return px + 24
+}
+
 // 估算表格列宽（px）：字段长度 × 10，夹在 50~300；没有长度的列（日期/下拉/
 // 布尔/列里套结构或表）统一给 100。优先级：元数据显式 width > 估算值。
+//
+// 最后再跟列头文字所需宽度取大值：列头现在是「行号 (POSNR)」这种带技术名的写法，
+// 比原来长出一截，光按字段长度估的话短字段（如 length=6）的列头会折成两行。
 function estimateColumnWidth(node) {
   if (node.width) return node.width // 元数据显式给了 width，直接用
 
   const MIN = 50
   const MAX = 300
-  if (!node.length) return 100 // 无 length，给默认宽
-  return Math.max(MIN, Math.min(MAX, node.length * 10))
+  const byLength = node.length
+    ? Math.max(MIN, Math.min(MAX, node.length * 10))
+    : 100 // 无 length，给默认宽
+  return Math.max(byLength, estimateHeaderWidth(displayTitle(node)))
 }
 
 // 判断一个 TABLE 的列里是否还套着「表 / 结构」（即是否为嵌套层）。
@@ -175,7 +196,7 @@ function toFormItemLeaf(field) {
 // 面板内递归 buildField：子表若仍含嵌套会再变 ArrayCollapse，叶子表回落 ArrayTable，
 // 故任意层级都向下堆叠、永不横向滚动。
 function buildCollapse(node) {
-  const label = node.label || node.name
+  const label = displayTitle(node)
   // 面板内叶子字段走响应式栅格（layoutProperties：叶子进 FormGrid、嵌套表/结构仍整行独立），
   // 这样折叠面板里的标量字段也能多列自适应，而不是一行一个竖着堆。
   const childProps = layoutProperties(childrenOf(node))
@@ -231,7 +252,7 @@ function buildTable(node) {
     itemProps[`c_${key}`] = {
       type: 'void',
       'x-component': 'ArrayTable.Column',
-      'x-component-props': { title: col.label || col.name, width: estimateColumnWidth(col) },
+      'x-component-props': { title: displayTitle(col), width: estimateColumnWidth(col) },
       // 关键：列包装器是 void（不存数据），真实字段名放里层；里层递归，故可无限嵌套
       properties: { [key]: field },
     }
@@ -247,7 +268,7 @@ function buildTable(node) {
 
   return {
     type: 'array',
-    title: node.label || node.name,
+    title: displayTitle(node),
     'x-decorator': 'Block',
     'x-component': 'ArrayTable',
     // scroll.x = max-content：按列宽之和排版、超出则横向滚动，

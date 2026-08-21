@@ -6,11 +6,12 @@
 //  · 脏数据保护：draft 为 null 表示「跟随表单实时刷新」，非 null 表示用户正在手改。
 //    没有这层，用户粘到一半的 JSON 会被下一次表单变更冲掉。
 import React, { useEffect, useReducer, useRef, useState } from 'react'
-import { Button, Alert, Space, Tag, message } from 'antd'
+import { Button, Alert, Space, Tag, App as AntApp } from 'antd'
 import JsonEditor from './JsonEditor'
 import { stripInternalKeys } from '../visibility'
 
 export default function PayloadPane({ form, active, onFill, disabled }) {
+  const { message } = AntApp.useApp()
   const [, bump] = useReducer((x) => x + 1, 0)
   const [draft, setDraft] = useState(null)
   const [error, setError] = useState('')
@@ -31,7 +32,10 @@ export default function PayloadPane({ form, active, onFill, disabled }) {
     }
   }, [form])
 
-  const live = JSON.stringify(stripInternalKeys(form.values ?? {}), null, 2)
+  // 只在本页可见时才序列化。订阅那道开关只挡住了「表单变更触发的重渲染」，挡不住 App
+  // 自身的重渲染（顶栏敲个函数名就是一次）——面板始终挂载着，不加这个判断照样每次都把
+  // 整份 values stringify 一遍。不可见时文本没人看得到，给空串即可，切回来自然重算。
+  const live = active ? JSON.stringify(stripInternalKeys(form.values ?? {}), null, 2) : ''
   const dirty = draft !== null
   const text = dirty ? draft : live
 

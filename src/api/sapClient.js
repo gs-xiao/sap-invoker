@@ -19,10 +19,20 @@ function buildActionUrl(baseUrl, action) {
   return `${baseUrl}${sep}action=${encodeURIComponent(action)}`
 }
 
+// Basic 认证串。btoa 只吃 Latin-1，密码里但凡有个中文或全角字符就直接抛
+// InvalidCharacterError，报到界面上是句看不懂的「连接失败：Invalid character」。
+// 先按 UTF-8 编码成字节再逐字节转 Latin-1，btoa 就能安全吃下（RFC 7617 也是这么约定的）。
+function basicToken(username, password) {
+  const bytes = new TextEncoder().encode(`${username}:${password}`)
+  let latin1 = ''
+  for (const b of bytes) latin1 += String.fromCharCode(b)
+  return btoa(latin1)
+}
+
 // Basic 认证头（未填用户名则不带 Authorization）
 function authHeaders(username, password) {
   const headers = { 'Content-Type': 'application/json' }
-  if (username) headers['Authorization'] = 'Basic ' + btoa(`${username}:${password}`)
+  if (username) headers['Authorization'] = 'Basic ' + basicToken(username, password)
   // 本地开发既不带 cookie 也没有账号，那就一定是 401。与其让调用方看到 SAP 的原始报文，
   // 不如直接说该去哪儿填。生产构建下没有这个问题（走会话）。
   else if (IS_DEV) throw new Error('未填写 SAP 用户名：点顶栏的环境标签填账号密码后「应用并连接」')

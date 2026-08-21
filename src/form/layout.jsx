@@ -10,7 +10,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { FormItem } from '@formily/antd-v5'
 import { useField } from '@formily/react'
-import { Card } from 'antd'
+import { Card, Button } from 'antd'
 import { DownOutlined, RightOutlined } from '@ant-design/icons'
 import { BRAND } from '../theme'
 
@@ -49,10 +49,16 @@ export const Block = ({ children, title, ...rest }) => {
         </span>
       }
       // 折叠箭头放标题右侧；点它切换展开态。收起时不渲染 body，减少大表单开销。
+      // 用 Button 而非裸 <a>：无 href 的 <a> 不可聚焦，键盘和读屏都够不到这个开关。
       extra={
-        <a onClick={() => setOpen((v) => !v)} style={{ color: 'inherit' }}>
-          {open ? <DownOutlined /> : <RightOutlined />}
-        </a>
+        <Button
+          type="text"
+          size="small"
+          aria-expanded={open}
+          aria-label={open ? '收起' : '展开'}
+          onClick={() => setOpen((v) => !v)}
+          icon={open ? <DownOutlined /> : <RightOutlined />}
+        />
       }
       style={{
         flexBasis: '100%', width: '100%', marginBottom: 12,

@@ -1,7 +1,18 @@
-# Formily JSON Schema → 表单 Demo
+# SAP 动态表单工作台
 
-左边粘贴 JSON Schema，点「生成表单」，右边实时渲染成可填写的 Ant Design 表单；
-点「提交」后经过校验，弹出最终出参 JSON（即将来要回传给 SAP FM 的入参）。
+给一个 SAP 函数名，从后端拉回它的参数元数据，转成 Formily Schema，直接渲染成可填写的
+Ant Design 表单；填完点「提交并调用 SAP」，校验通过后把入参回传给该 FM 并弹出返回结果。
+
+整个页面是三个 Tab 的同一份数据的三种视图：
+
+| Tab | 看的是什么 | 能干什么 |
+|---|---|---|
+| 动态表单视图 | 渲染出来的表单 | 填值、折叠结构块、增删表格行 |
+| JSON Schema 结构 | 表单的骨架 | 手填中性元数据或直接改 Formily Schema，应用回表单 |
+| 请求 Body 预览 & 填充 | 将要发给 FM 的入参 | 实时预览，也可反向改 JSON 回填表单 |
+
+调用记录、变式（命名的表单状态）、同事分享过来的记录都存在 SAP 后端（`ZINVOKER_REC`），
+在顶栏的「数据资产中心」里统一管理。
 
 ## 运行
 
@@ -47,8 +58,10 @@ vite.config.js             构建期：按 .env 的 SAP_*_TARGET 自动生成开
 src/
   config.js                运行时：读 .env 拼环境地址与服务名 + 栅格列数
   theme.js                 全局视觉：ConfigProvider 主题 token（主色/圆角/字号/卡片头底色）
+  main.jsx                 挂载根：ConfigProvider + antd <App>（message/modal 要吃主题必须走它）
   App.jsx                  布局骨架（顶栏 + 函数栏 + 主区 Tabs）+ 组装 hooks/Modal
   metadataToSchema.js      中性元数据 → Formily Schema（叶子进 FormGrid 栅格）
+  techName.js              「中文 (TECH)」显示格式及其逆运算，表单 label 与显隐树共用
   visibility.js            字段显隐纯逻辑（对 FormGrid void 节点透传，路径不变）
   form/
     schemaField.js         createSchemaField 组件注册表
@@ -56,18 +69,22 @@ src/
     layout.jsx             Block（可折叠卡片）+ WidthItem（兼容旧记录）
   api/sapClient.js         获取元数据 / 提交调用 / 记录存储（Z_INVOKER_STORE）的网络层
   hooks/
-    useDynamicForm.js      schema/显隐/form 重建 + 派生数据
+    useDynamicForm.js      schema/显隐/form 重建 + 派生数据 + 退回上一版
     useRecordStore.js      SAP 后端存储底座（ZINVOKER_REC 表），下面两个 hook 共用
     useCallHistory.js      调用记录（kind='HIST'）
     useVariants.js         变式：命名的表单状态（kind='VAR'，含显隐配置）
+    useAssetActions.js     记录/变式共用的删除·清空·下载·导入（含危险操作二次确认）
   components/
     ConnectionPopover.jsx  顶栏环境 chip，点开是环境/用户名/密码（仅本地开发可编辑）
+    FormPane.jsx           主区 Tab：Formily 表单树（React.memo，外面打字不重渲它）
+    SchemaErrorBoundary.jsx 兜住渲染期崩溃，就地显示错误并提供「退回上一版 Schema」
     SchemaPane.jsx         主区 Tab：中性元数据 ⇄ Formily Schema 两种格式，编辑后应用到表单
     PayloadPane.jsx        主区 Tab：实时请求 Body 预览，也可反向手改 JSON 回填表单
     AssetHubModal.jsx      数据资产中心：调用记录 / 变式 / 分享给我的 三合一弹窗
     RecordList.jsx         上面三个 Tab 共用的行渲染（就地改名 + 主动作 + ⋯ 菜单）
     JsonEditor.jsx         等宽字体 JSON 文本域（各处共用）
     VisibilityModal.jsx    字段显隐配置（勾选树 / 可分享 JSON）
+    ShareModal.jsx         把一条记录/变式分享给同事
     ResultModal.jsx        提交返回结果
 ```
 
@@ -82,11 +99,12 @@ src/
 ```
 
 - **函数名常驻输入框**：拉元数据的按钮是 `Dropdown.Button`，下拉可切「从 SAP 后端拉取 / AI 智能解析」两种方式，主键执行当前选中项——两者并列可选，不做自动降级。
-- **三个 Tab 面板始终挂载**（`destroyInactiveTabPane` 保持默认 false）。这是硬约束：切走若卸载 `SchemaField`，Formily 字段模型会走 `onUnmount` 从 form graph 移除，已填的值和 ArrayTable 的行会全丢。改这块时务必实测「填几个字段 + 加两行表格 → 切到 Schema Tab → 切回来」。
+- **三个 Tab 面板始终挂载**（`App.jsx` 里的 `Pane` 用 `display` 切换，**绝不条件渲染**）。这是硬约束：切走若卸载 `SchemaField`，Formily 字段模型会走 `onUnmount` 从 form graph 移除，已填的值和 ArrayTable 的行会全丢。改这块时务必实测「填几个字段 + 加两行表格 → 切到 Schema Tab → 切回来」。
 - **请求 Body 是实时的**：`PayloadPane` 订阅 form 变更；手改 JSON 后进入「已手动编辑」态，不再被表单变更冲掉，点「同步 Body 至表单」或「重置为当前表单」回到实时。
 - 叶子字段由 `metadataToSchema` 分组进官方 **FormGrid** 响应式栅格：宽屏多列、窄屏自动减列，长字段 `gridSpan` 占多列（不再手写像素宽）。
+- **label 同时给中文和技术名**：`物料号 (IV_MATNR)`。字段 label、结构块/表标题、表格列头、折叠面板 header 四处都是这个格式，由 `techName.js` 的 `withTechName` 统一拼、在生成 schema 时烘焙进 `title`。没给中文标签的字段只显示技术名。显隐树那边是反过来的 `IV_MATNR（物料号）`，读的是同一个 `title`，故先用 `stripTechName` 把技术名摘掉再拼——旧记录里 `title` 是纯中文，摘不动就原样返回，照旧可读。
 - 结构（STRUCTURE）渲染成**可折叠卡片**（`Block`），点标题右侧箭头收起/展开。
-- FormGrid 是无数据的 void 容器，`visibility.js` 对它透传，故字段路径仍是「结构名.字段名」——历史记录和显隐方案跨改版仍可套用。
+- FormGrid 是无数据的 void 容器，`visibility.js` 对它透传，故字段路径仍是「结构名.字段名」——历史记录和变式里的显隐配置跨改版仍可套用。
 
 ## 数据资产中心
 
