@@ -1,7 +1,10 @@
 // 字段显隐配置弹窗：勾选树 / JSON 两种视图；底部快捷动作（隐藏空值、全显/全隐）。
 // 显隐配置本身不单独持久化——调好后连同值与布局一起存成「变式」即可复用。
+// 注意这里没有「保存 / 确定」按钮：勾选是即时生效的（onTreeCheck 直接更新 config），
+// 加一个只会关窗的「保存配置」反而让人以为存在别处了。
 import React from 'react'
 import { Modal, Space, Button, Select as AntSelect, Tree, Alert } from 'antd'
+import JsonEditor from './JsonEditor'
 
 export default function VisibilityModal({
   open, onClose,
@@ -43,7 +46,7 @@ export default function VisibilityModal({
       </Space>
 
       {visView === 'tree' ? (
-        <div style={{ maxHeight: '58vh', overflow: 'auto', border: '1px solid #eee', borderRadius: 4, padding: 8 }}>
+        <div style={{ maxHeight: '58vh', overflow: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, padding: 8 }}>
           {treeData.length ? (
             <Tree
               checkable
@@ -62,16 +65,7 @@ export default function VisibilityModal({
           <div style={{ marginBottom: 8, color: '#888', fontSize: 12 }}>
             这份 JSON 就是可分享的显隐配置：只列出被隐藏的字段（缺省即显示）。改完点「应用 JSON」。
           </div>
-          <textarea
-            value={visJsonText}
-            onChange={(e) => setVisJsonText(e.target.value)}
-            spellCheck={false}
-            style={{
-              width: '100%', height: '48vh', fontFamily: 'Consolas, monospace',
-              fontSize: 13, resize: 'vertical', border: '1px solid #eee', padding: 8,
-              boxSizing: 'border-box',
-            }}
-          />
+          <JsonEditor value={visJsonText} onChange={setVisJsonText} height="48vh" />
           <div style={{ marginTop: 8 }}>
             <Button type="primary" onClick={onApplyJson}>应用 JSON</Button>
           </div>

@@ -1,6 +1,17 @@
 // SAP 接口调用层：地址拼接、认证头、获取元数据、提交调用。与 UI 无关的纯网络逻辑。
 // 环境地址、元数据服务名等来自 ../config，改配置不用动这里。
-import { ENVIRONMENTS, SAP } from '../config'
+import { ENVIRONMENTS, SAP, IS_DEV } from '../config'
+
+// 本地开发一律不带 cookie。
+//
+// 走 vite 代理时 SAP 的 Set-Cookie 会透传下来落在 localhost 上，只要成功登录过一次，
+// 之后每个请求都自动带 SAP_SESSIONID，而 SAP 认 cookie 优先于 Authorization —— 结果就是
+// 密码填错也照样通，换个用户名也还是旧身份在跑，「连接设置」形同虚设。omit 同时还能挡掉
+// 浏览器在收到 401 时自己弹原生登录框（那个框一登又会种回 cookie），而我们手写的
+// Authorization 头不受它影响，照发。
+//
+// 生产构建（部署到 BSP）反过来：同源、没有账号密码可填，靠的就是浏览器已有的 SAP 会话。
+const CREDENTIALS = IS_DEV ? 'omit' : 'same-origin'
 
 // 拼接调用地址：baseUrl 已带 ? 参数时用 &，否则用 ? 起头，避免 zpub_api&action=… 的错误
 function buildActionUrl(baseUrl, action) {
@@ -12,6 +23,9 @@ function buildActionUrl(baseUrl, action) {
 function authHeaders(username, password) {
   const headers = { 'Content-Type': 'application/json' }
   if (username) headers['Authorization'] = 'Basic ' + btoa(`${username}:${password}`)
+  // 本地开发既不带 cookie 也没有账号，那就一定是 401。与其让调用方看到 SAP 的原始报文，
+  // 不如直接说该去哪儿填。生产构建下没有这个问题（走会话）。
+  else if (IS_DEV) throw new Error('未填写 SAP 用户名：点顶栏的环境标签填账号密码后「应用并连接」')
   return headers
 }
 
@@ -30,6 +44,7 @@ export async function fetchMetadata({ env, username, password, funcName, action 
   const resp = await fetch(url, {
     method: 'POST',
     headers: authHeaders(username, password),
+    credentials: CREDENTIALS,
     // 后端服务的入参名如与此不同，改 config 里的 SAP.metadataFuncKey 即可
     body: JSON.stringify({ [SAP.metadataFuncKey]: funcName }),
   })
@@ -49,6 +64,7 @@ export async function submitCall({ env, username, password, action, payload }) {
   const resp = await fetch(url, {
     method: 'POST',
     headers: authHeaders(username, password),
+    credentials: CREDENTIALS,
     body: JSON.stringify(payload),
   })
   const raw = await resp.text()
@@ -70,6 +86,7 @@ async function callStore(op, body, { env, username, password }) {
   const resp = await fetch(url, {
     method: 'POST',
     headers: authHeaders(username, password),
+    credentials: CREDENTIALS,
     body: JSON.stringify({ op, ...body }),
   })
   const raw = await resp.text()

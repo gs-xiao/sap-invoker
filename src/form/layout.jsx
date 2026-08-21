@@ -12,6 +12,7 @@ import { FormItem } from '@formily/antd-v5'
 import { useField } from '@formily/react'
 import { Card } from 'antd'
 import { DownOutlined, RightOutlined } from '@ant-design/icons'
+import { BRAND } from '../theme'
 
 // 全局「全部展开/折叠」命令：App 每次点按钮广播一个新对象 { open }，所有 Block 据此同步开合。
 // 缺省 null（不下命令）；单个卡片仍可各自点箭头独立开合。
@@ -39,7 +40,14 @@ export const Block = ({ children, title, ...rest }) => {
   return (
     <Card
       size="small"
-      title={heading}
+      // 标题左侧一道主色竖条：底色已由主题的 Card.headerBg 统一给成浅灰，
+      // 光靠底色跟白底 body 对比太弱，用竖条把「这是一个结构块」标出来。
+      title={
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 3, height: 14, borderRadius: 2, background: BRAND }} />
+          {heading}
+        </span>
+      }
       // 折叠箭头放标题右侧；点它切换展开态。收起时不渲染 body，减少大表单开销。
       extra={
         <a onClick={() => setOpen((v) => !v)} style={{ color: 'inherit' }}>
@@ -48,8 +56,6 @@ export const Block = ({ children, title, ...rest }) => {
       }
       style={{ flexBasis: '100%', width: '100%', marginBottom: 12 }}
       styles={{
-        // 标题栏加柔和底色，与白底内容区上下分开
-        header: { background: '#e6f4ff' },
         body: { display: open ? 'block' : 'none' },
       }}
       {...rest}

@@ -1,14 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { FormProvider } from '@formily/react'
 import { FormLayout } from '@formily/antd-v5'
 import {
-  ConfigProvider, message, Alert, Button, Space,
-  Select as AntSelect, Input as AntInput, Modal,
+  ConfigProvider, message, Alert, Button, Space, Badge, Tabs, Dropdown,
+  Input as AntInput, Modal,
 } from 'antd'
+import { DatabaseOutlined, SearchOutlined, CloudDownloadOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import zhCN from 'antd/locale/zh_CN'
 import 'antd/dist/reset.css'
 
 import { ENVIRONMENTS, SAP, IS_DEV } from './config'
+import { theme, SURFACE, HAIRLINE } from './theme'
 import { SchemaField } from './form/schemaField'
 import { BlockCollapseContext } from './form/layout'
 import { metadataToSchema } from './metadataToSchema'
@@ -18,13 +20,16 @@ import { useDynamicForm } from './hooks/useDynamicForm'
 import { useCallHistory } from './hooks/useCallHistory'
 import { useVariants } from './hooks/useVariants'
 import { downloadJson, timestampName } from './utils/file'
-import MetaModal from './components/MetaModal'
-import DataFillModal from './components/DataFillModal'
-import HistoryModal from './components/HistoryModal'
-import VariantModal from './components/VariantModal'
-import ShareInboxModal from './components/ShareInboxModal'
+import AssetHubModal from './components/AssetHubModal'
+import ConnectionPopover from './components/ConnectionPopover'
+import SchemaPane from './components/SchemaPane'
+import PayloadPane from './components/PayloadPane'
 import ResultModal from './components/ResultModal'
 import VisibilityModal from './components/VisibilityModal'
+
+// Tab 面板高度 = 视口高 - （顶栏 + 函数栏 + 页签栏 + 下边距）。面板内部再自己滚动，
+// 这样长表单滚动时顶栏和函数栏始终留在原地。
+const PANE_STYLE = { height: 'calc(100vh - 178px)' }
 
 export default function App() {
   // 表单生命周期（schema / 显隐 / form 重建 / 派生数据）集中在此 hook
@@ -55,7 +60,6 @@ export default function App() {
   } = useVariants(getAuth)
 
   // 「分享给我的」收件箱
-  const [inboxOpen, setInboxOpen] = useState(false)
   const [inbox, setInbox] = useState([])
   const [inboxLoading, setInboxLoading] = useState(false)
   const refreshInbox = useCallback(async () => {
@@ -74,31 +78,25 @@ export default function App() {
   const [shareNote, setShareNote] = useState('')
   const [shareBusy, setShareBusy] = useState(false)
 
-  // 数据回填相关
-  const [dataOpen, setDataOpen] = useState(false)
-  const [dataText, setDataText] = useState('')
-  const [dataError, setDataError] = useState('')
+  // 主区 Tab：动态表单 / JSON Schema / 请求 Body
+  const [mainTab, setMainTab] = useState('form')
 
   // 元数据 → Schema 相关
-  const [metaOpen, setMetaOpen] = useState(false)
-  const [metaText, setMetaText] = useState('') // JSON 编辑框内容 = 当前表单的 Formily Schema
-  const [metaError, setMetaError] = useState('')
-  const [metaShowJson, setMetaShowJson] = useState(false) // 是否展开 JSON Schema 编辑区
-  const [metaShowInput, setMetaShowInput] = useState(false) // 是否展开「手动填写元数据」区
+  const [schemaMode, setSchemaMode] = useState('meta')   // Schema 页的输入格式：'meta' | 'schema'
+  const [metaText, setMetaText] = useState('')           // Formily Schema 编辑框内容
   const [metaInputText, setMetaInputText] = useState('') // 手填的中性元数据 JSON
+  const [metaError, setMetaError] = useState('')
   const [metaFuncName, setMetaFuncName] = useState(SAP.defaultFuncName) // 目标 FM 函数名
   const [metaLoading, setMetaLoading] = useState(false)
-  const [metaAiLoading, setMetaAiLoading] = useState(false) // AI 获取元数据按钮的 loading
+  const [fetchMode, setFetchMode] = useState('normal')   // 函数栏拉取方式：'normal' | 'ai'
 
   // 接口调用结果相关
   const [result, setResult] = useState(null)     // { ok, status, body }
   const [resultOpen, setResultOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  // 调用记录弹窗
-  const [historyOpen, setHistoryOpen] = useState(false)
-  // 变式弹窗
-  const [variantOpen, setVariantOpen] = useState(false)
+  // 数据资产中心弹窗（调用记录 / 变式 / 分享给我的，三个 Tab 合一）
+  const [hubOpen, setHubOpen] = useState(false)
 
   // 字段显隐配置
   const [visOpen, setVisOpen] = useState(false)
@@ -108,6 +106,9 @@ export default function App() {
 
   // 是否已有可用表单（applied 里有字段/栅格）
   const hasForm = !!(applied?.properties && Object.keys(applied.properties).length > 0)
+
+  // 未读分享数：顶栏资产中心按钮上的小红点
+  const unreadShares = inbox.filter((i) => i.read_flag !== 'X').length
 
   // 全部展开/折叠：collapseCmd 每点一次换一个新对象广播给所有 Block；allCollapsed 控制按钮文案
   const [collapseCmd, setCollapseCmd] = useState(null)
@@ -120,38 +121,41 @@ export default function App() {
   // 换了 schema（重新生成/恢复记录）→ 复位为「全部展开」文案（新块默认展开）
   useEffect(() => { setAllCollapsed(false) }, [applied])
 
+  // Schema 页的编辑框始终反映「当前生效的 Schema」。恢复记录/变式也会走这里，
+  // 否则切到 Schema 页看到的还是上一个表单的结构。
+  useEffect(() => {
+    setMetaText(applied?.properties && Object.keys(applied.properties).length
+      ? JSON.stringify(applied, null, 2)
+      : '')
+  }, [applied])
+
+  // Tab 右侧的结构概览：顶层 FormGrid 里装的是叶子字段，其余顶层键是 STRUCTURE/TABLE 容器
+  const { leafCount, blockCount } = useMemo(() => {
+    let leaf = 0, block = 0
+    for (const v of Object.values(applied?.properties ?? {})) {
+      if (v?.['x-component'] === 'FormGrid') leaf += Object.keys(v.properties ?? {}).length
+      else block += 1
+    }
+    return { leafCount: leaf, blockCount: block }
+  }, [applied])
+
   // ---- 元数据 → 表单 ----
 
-  // 打开数据回填弹窗，预填当前表单已有的值
-  const openDataFill = () => {
-    setDataText(JSON.stringify(stripInternalKeys(form.values ?? {}), null, 2))
-    setDataError('')
-    setDataOpen(true)
-  }
-
-  // 打开「元数据 → 表单」：默认收起 JSON；预填 JSON 编辑框 = 当前已生成的 Schema
-  const openMeta = () => {
-    setMetaText(hasForm ? JSON.stringify(applied, null, 2) : '')
-    setMetaShowJson(false)
-    setMetaShowInput(false)
-    setMetaError('')
-    setMetaOpen(true)
-  }
-
-  // 展开的 JSON 编辑框内容就是 Formily Schema，点「应用到表单」直接生成/更新表单。
+  // Schema 页的「Formily Schema」格式：编辑框内容就是当前表单的 Schema，点应用即生成/更新表单。
   // 用 applySchemaKeepState：保留当前已填值与显隐配置，只更新结构/布局，避免微调 JSON 就丢数据。
   const applyJsonToForm = () => {
     try {
       const schema = JSON.parse(metaText)
       applySchemaKeepState(schema)
       setMetaError('')
+      setMainTab('form')
       message.success('已按 JSON 更新表单')
     } catch (e) {
       setMetaError('JSON 解析失败：' + e.message)
     }
   }
 
-  // 不走接口：把手填的「中性元数据 JSON」走 metadataToSchema 转 Schema → 生成表单
+  // Schema 页的「中性元数据」格式：不走接口，直接把手填的元数据 JSON 转 Schema → 生成表单
   const convertMetaAndGenerate = () => {
     let meta
     try {
@@ -168,18 +172,17 @@ export default function App() {
       return
     }
     applySchema(schema)                            // 直接生成表单
-    setMetaText(JSON.stringify(schema, null, 2))   // 同步进 JSON Schema 编辑框，便于后续查看/微调
+    setMetaText(JSON.stringify(schema, null, 2))   // 同步进 Schema 编辑框，便于后续查看/微调
     setMetaError('')
-    setMetaOpen(false)
+    setMainTab('form')
     message.success('已按手填元数据生成表单')
   }
 
-  // 一键：调 SAP 拉元数据 → 转 Schema → 直接生成表单并关闭弹窗（复用当前环境 + 账号密码）。
+  // 函数栏一键：调 SAP 拉元数据 → 转 Schema → 直接生成表单（复用当前环境 + 账号密码）。
   // action 缺省走普通元数据服务；传 SAP.metadataAiAction 即走 AI 方式（入参/出参一致）。
   const fetchAndGenerate = async ({ action = SAP.metadataAction, ai = false } = {}) => {
     if (!metaFuncName.trim()) { message.error('请填写目标函数名'); return }
-    const setLoading = ai ? setMetaAiLoading : setMetaLoading
-    setLoading(true)
+    setMetaLoading(true)
     try {
       const meta = await apiFetchMetadata({ env, username, password, funcName: metaFuncName.trim(), action })
       let schema
@@ -187,18 +190,28 @@ export default function App() {
         schema = metadataToSchema(meta)
       } catch (e) {
         setMetaError('元数据转换 Schema 失败：' + e.message)
+        setMainTab('schema')
         return
       }
       applySchema(schema)                            // 直接生成表单
-      setMetaText(JSON.stringify(schema, null, 2))   // 同步进 JSON 编辑框，便于后续查看/微调
+      setMetaText(JSON.stringify(schema, null, 2))   // 同步进 Schema 编辑框，便于后续查看/微调
       setMetaError('')
-      setMetaOpen(false)
+      setMainTab('form')
       message.success(ai ? '已用 AI 获取元数据并生成表单' : '已获取元数据并生成表单')
     } catch (e) {
+      // 拉取失败把错误显示在 Schema 页（那里有 Alert 位），同时切过去让用户看得见
       setMetaError(e.message)
+      setMainTab('schema')
+      message.error('获取元数据失败：' + e.message)
     } finally {
-      setLoading(false)
+      setMetaLoading(false)
     }
+  }
+
+  // 函数栏拉取按钮：主键执行当前选中的方式，下拉里可切换
+  const FETCH_MODES = {
+    normal: { label: '从 SAP 后端拉取', run: () => fetchAndGenerate() },
+    ai: { label: 'AI 智能解析', run: () => fetchAndGenerate({ action: SAP.metadataAiAction, ai: true }) },
   }
 
   // ---- 数据填充 ----
@@ -207,24 +220,6 @@ export default function App() {
   const fillValues = async (values) => {
     await form.reset('*', { forceClear: true, validate: false })
     form.setValues(values)
-  }
-
-  const handleFill = async () => {
-    let parsed
-    try {
-      parsed = JSON.parse(dataText)
-    } catch (e) {
-      setDataError('JSON 解析失败：' + e.message)
-      return
-    }
-    try {
-      await fillValues(parsed)
-      setDataError('')
-      setDataOpen(false)
-      message.success('已按 JSON 填充表单')
-    } catch (e) {
-      setDataError('填充失败：' + e.message)
-    }
   }
 
   // ---- 调用记录 / 变式：打开即拉列表 ----
@@ -237,11 +232,64 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const openHistory = () => { setHistoryOpen(true); refreshHistory().catch((e) => message.error('加载记录失败：' + e.message)) }
-  const openVariants = () => { setVariantOpen(true); refreshVariants().catch((e) => message.error('加载变式失败：' + e.message)) }
-  const openInbox = () => { setInboxOpen(true); refreshInbox() }
+  // ---- 连接设置（环境 / 账号）的提交 ----
+  //
+  // 环境和账号是「填好点按钮才生效」的，不随输入实时变。点下去做两件事：
+  // 先用刚填的这套凭据真发一次请求探连通性与鉴权，通了才提交到全局 state 并重拉列表。
+  // 探测这一次必须把 next 显式传给 API —— 同一个事件里 setState 还没提交，
+  // getAuth() 拿到的仍是旧值；至于要读 state 的 refreshHistory/refreshVariants，
+  // 交给下面 connTick 的 effect 在 state 提交之后再跑。
+  const [connBusy, setConnBusy] = useState(false)
+  const [connTick, setConnTick] = useState(0)
+
+  const applyConnection = async (next) => {
+    setConnBusy(true)
+    try {
+      // 拿收件箱当探针：只读、轻量，结果本身也用得上；账号错会是 HTTP 401，环境没配会直接抛
+      const list = await sapStore.shareInbox(next)
+      setInbox(Array.isArray(list) ? list : [])
+      setEnv(next.env)
+      setUsername(next.username)
+      setPassword(next.password)
+      setConnTick((t) => t + 1)
+      message.success(`已连接【${ENVIRONMENTS[next.env]?.label || next.env}】`)
+      return true
+    } catch (e) {
+      message.error('连接失败：' + e.message)
+      return false // 返回 false 让弹层留在原地，方便直接改
+    } finally {
+      setConnBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!connTick) return
+    refreshHistory().catch((e) => message.error('加载记录失败：' + e.message))
+    refreshVariants().catch((e) => message.error('加载变式失败：' + e.message))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connTick])
+
+  // 打开资产中心：三份列表并发刷新，任一失败只提示不阻塞其余
+  const openAssetHub = () => {
+    setHubOpen(true)
+    refreshHistory().catch((e) => message.error('加载记录失败：' + e.message))
+    refreshVariants().catch((e) => message.error('加载变式失败：' + e.message))
+    refreshInbox()
+  }
 
   // ---- 调用记录 ----
+
+  // 危险操作统一走这个二次确认。原先「清空记录/清空变式」点了就执行，
+  // 反倒是可撤销得多的「变式重名覆盖」有确认框，轻重是反的。
+  const confirmDanger = (title, content, okText) =>
+    new Promise((resolve) => {
+      Modal.confirm({
+        title, content, okText, cancelText: '取消',
+        okButtonProps: { danger: true },
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      })
+    })
 
   const restoreFromHistory = async (rec) => {
     try {
@@ -249,16 +297,19 @@ export default function App() {
       restore(full?.schema || applied, full?.values || {}, full?.config || {})
       if (rec.action) setMetaFuncName(rec.action)
       if (rec.env && ENVIRONMENTS[rec.env]) setEnv(rec.env)
-      setHistoryOpen(false)
+      setHubOpen(false)
       message.success('已从记录填充')
     } catch (e) { message.error('填充失败：' + e.message) }
   }
 
-  const onDeleteHistory = async (id) => {
-    try { await deleteHistory(id); await refreshHistory(); message.success('已删除该记录') }
+  const onDeleteHistory = async (rec) => {
+    const label = rec.name || rec.action || '这条记录'
+    if (!await confirmDanger('删除调用记录', `将删除「${label}」，无法恢复。`, '删除')) return
+    try { await deleteHistory(rec.id); await refreshHistory(); message.success('已删除该记录') }
     catch (e) { message.error('删除失败：' + e.message) }
   }
   const onClearHistory = async () => {
+    if (!await confirmDanger('清空调用记录', `将删除全部 ${history.length} 条调用记录，无法恢复。`, '清空')) return
     try { await clearHistory(); await refreshHistory(); message.success('已清空调用记录') }
     catch (e) { message.error('清空失败：' + e.message) }
   }
@@ -333,16 +384,18 @@ export default function App() {
       const full = await getVariantFull(rec.id)
       restore(full?.schema || applied, full?.values || {}, full?.config || {})
       if (rec.action) setMetaFuncName(rec.action)
-      setVariantOpen(false)
+      setHubOpen(false)
       message.success(`已应用变式「${rec.name || '未命名'}」`)
     } catch (e) { message.error('应用失败：' + e.message) }
   }
 
-  const onDeleteVariant = async (id) => {
-    try { await deleteVariant(id); await refreshVariants(); message.success('已删除该变式') }
+  const onDeleteVariant = async (rec) => {
+    if (!await confirmDanger('删除变式', `将删除变式「${rec.name || '未命名'}」，无法恢复。`, '删除')) return
+    try { await deleteVariant(rec.id); await refreshVariants(); message.success('已删除该变式') }
     catch (e) { message.error('删除失败：' + e.message) }
   }
   const onClearVariants = async () => {
+    if (!await confirmDanger('清空变式', `将删除全部 ${variants.length} 个变式，无法恢复。`, '清空')) return
     try { await clearVariants(); await refreshVariants(); message.success('已清空变式') }
     catch (e) { message.error('清空失败：' + e.message) }
   }
@@ -386,18 +439,25 @@ export default function App() {
       const full = await sapStore.shareGet(it.share_id, getAuth())
       restore(full?.schema || applied, full?.values || {}, full?.config || {})
       if (it.action) setMetaFuncName(it.action)
-      setInboxOpen(false)
+      setHubOpen(false)
       refreshInbox() // 已读态更新
       message.success('已从分享填充')
     } catch (e) { message.error('填充失败：' + e.message) }
   }
-  // 收件箱：另存为我的（复制成自己的记录，占自己额度）
+  // 收件箱：另存为我的（复制成自己的记录，占自己额度）。
+  // 环境/状态得从收件箱条目带过来——之前这里一律传空串，另存出来的调用记录在列表里
+  // 显示成红色「失败」+ 空环境 Tag，看着像是这次调用真的失败过。
+  // 注：payload 里只有 {schema,values,config,body}，环境与状态是独立的表列，取不到就留空，
+  // 列表侧会显示成「状态未知」而不是「失败」。
   const onInboxSaveAs = async (it) => {
     try {
       const full = await sapStore.shareGet(it.share_id, getAuth())
       await sapStore.recSave({
         kind: it.kind, rec_name: it.name || '', action: it.action || '',
-        environ: '', env_label: '', ok_flag: '', status: '',
+        environ: it.environ || '',
+        env_label: it.env_label || '',
+        ok_flag: it.ok === 'X' || it.ok === true ? 'X' : '',
+        status: it.status == null ? '' : String(it.status),
         payload: JSON.stringify(full || {}),
       }, getAuth())
       if (it.kind === 'VAR') refreshVariants(); else refreshHistory()
@@ -419,7 +479,7 @@ export default function App() {
       return
     }
     if (!metaFuncName.trim()) {
-      message.error('请先在「元数据 → 表单」里填写函数名')
+      message.error('请先在顶部函数栏填写 SAP 函数名称')
       return
     }
     const action = metaFuncName.trim()
@@ -496,68 +556,42 @@ export default function App() {
   }
 
   return (
-    <ConfigProvider locale={zhCN}>
-      {/* 纵向 Flex：上=固定工具栏（不随滚动），下=表单滚动区 */}
-      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+    <ConfigProvider locale={zhCN} theme={theme}>
+      {/* 纵向 Flex：顶栏 + 函数栏固定不滚，主区 Tab 自己撑满剩余高度 */}
+      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', background: SURFACE }}>
 
-        {/* ===== 置顶工具栏 ===== */}
+        {/* ===== ① 顶栏：身份 + 环境 + 全局动作 ===== */}
         <div
           style={{
             flex: '0 0 auto',
             background: '#fff',
-            borderBottom: '1px solid #f0f0f0',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+            borderBottom: `1px solid ${HAIRLINE}`,
             padding: '10px 16px',
             zIndex: 10,
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-            {/* 左：标题 + 接口调用参数 */}
-            <Space wrap size={8}>
-              <strong style={{ fontSize: 16, marginRight: 4 }}>自动生成的表单</strong>
-              {/* 本地开发才显示「环境 / 用户名 / 密码」；部署到 BSP（生产构建）同源走 SAP 会话，隐藏 */}
-              {IS_DEV && (
-                <>
-                  <span>环境：</span>
-                  <AntSelect
-                    value={env}
-                    onChange={setEnv}
-                    style={{ width: 120 }}
-                    options={Object.entries(ENVIRONMENTS).map(([k, v]) => ({
-                      value: k,
-                      label: v.url ? v.label : `${v.label}（未配置）`,
-                    }))}
-                  />
-                  <AntInput
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="用户名"
-                    style={{ width: 130 }}
-                  />
-                  <AntInput.Password
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="密码"
-                    style={{ width: 130 }}
-                  />
-                </>
-              )}
-              <span style={{ color: '#888' }}>
-                将调用：{metaFuncName ? <b>{metaFuncName}</b> : '（未设置）'}
-              </span>
+            <Space wrap size={10}>
+              <strong style={{ fontSize: 15 }}>SAP 动态表单工作台</strong>
+              <span style={{ color: '#94a3b8', fontSize: 12 }}>Formily 驱动 · 元数据即表单</span>
+              <ConnectionPopover
+                env={env}
+                username={username}
+                password={password}
+                onApply={applyConnection}
+                applying={connBusy}
+              />
             </Space>
 
-            {/* 右：动作按钮 + 提交 */}
             <Space wrap size={8}>
-              <Button onClick={openHistory} loading={historyLoading}>调用记录（{history.length}）</Button>
-              <Button onClick={openVariants} loading={variantLoading}>变式（{variants.length}）</Button>
-              <Button onClick={openInbox}>
-                分享给我的（{inbox.length}{inbox.some((i) => i.read_flag !== 'X') ? ' ·新' : ''}）
-              </Button>
+              <Badge dot count={unreadShares} offset={[-6, 4]}>
+                <Button icon={<DatabaseOutlined />} onClick={openAssetHub} loading={historyLoading || variantLoading}>
+                  数据资产中心
+                  <span style={{ color: '#94a3b8', marginLeft: 4 }}>{history.length} / {variants.length}</span>
+                </Button>
+              </Badge>
               <Button onClick={toggleCollapseAll} disabled={!hasForm}>{allCollapsed ? '全部展开' : '全部折叠'}</Button>
               <Button onClick={openVisConfig} disabled={!hasForm}>字段显隐</Button>
-              <Button onClick={openDataFill} disabled={!hasForm}>填充数据 JSON</Button>
-              <Button type="primary" onClick={openMeta}>元数据 → 表单</Button>
               <Button type="primary" danger loading={submitting} disabled={!hasForm} onClick={doSubmit}>
                 提交并调用 SAP
               </Button>
@@ -565,99 +599,162 @@ export default function App() {
           </div>
         </div>
 
-        {/* ===== 表单滚动区 ===== */}
-        <div style={{ flex: '1 1 auto', overflow: 'auto', padding: 16 }}>
-          {!hasForm && (
-            <Alert
-              type="info"
-              showIcon
-              style={{ marginBottom: 16 }}
-              message="尚未生成表单"
-              description="点右上角「元数据 → 表单」，填函数名从接口获取，或直接粘贴 Formily Schema，再点「生成表单」。"
+        {/* ===== ② 函数栏：常驻，随时能看到/改「当前要调哪个 FM」 ===== */}
+        <div
+          style={{
+            flex: '0 0 auto',
+            background: '#fff',
+            borderBottom: `1px solid ${HAIRLINE}`,
+            padding: '10px 16px',
+          }}
+        >
+          <Space wrap size={8}>
+            <span style={{ color: '#64748b' }}>SAP 函数名称</span>
+            <AntInput
+              value={metaFuncName}
+              onChange={(e) => setMetaFuncName(e.target.value)}
+              onPressEnter={FETCH_MODES[fetchMode].run}
+              prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
+              placeholder="如 ZTEST_STR"
+              style={{ width: 280 }}
             />
-          )}
-          <BlockCollapseContext.Provider value={collapseCmd}>
-            <FormProvider form={form}>
-              <FormLayout layout="vertical">
-                <SchemaField schema={renderSchema} />
-              </FormLayout>
-            </FormProvider>
-          </BlockCollapseContext.Provider>
+            {/* 拆分按钮：主键执行当前方式，下拉切换普通 / AI 解析（两者并列，不做自动降级） */}
+            <Dropdown.Button
+              type="primary"
+              loading={metaLoading}
+              icon={<span style={{ fontSize: 10 }}>▾</span>}
+              onClick={FETCH_MODES[fetchMode].run}
+              menu={{
+                selectable: true,
+                selectedKeys: [fetchMode],
+                items: [
+                  { key: 'normal', icon: <CloudDownloadOutlined />, label: FETCH_MODES.normal.label },
+                  { key: 'ai', icon: <ThunderboltOutlined />, label: FETCH_MODES.ai.label },
+                ],
+                onClick: ({ key }) => { setFetchMode(key); FETCH_MODES[key].run() },
+              }}
+            >
+              {FETCH_MODES[fetchMode].label}
+            </Dropdown.Button>
+          </Space>
+        </div>
+
+        {/* ===== ③ 主区三 Tab =====
+            注意：这里绝不能开 destroyOnHidden / destroyInactiveTabPane。表单面板一旦被销毁，
+            Formily 字段模型会走 onUnmount 从 form graph 里摘掉，切回来时已填的值、表格行、
+            校验态都要重来。antd Tabs 默认保留非激活面板的 DOM，正是我们需要的行为。
+
+            面板高度用 calc(100vh - 顶栏/函数栏/页签栏) 定死，而不是 height:100% 层层继承——
+            antd 的 .ant-tabs-content 没有高度，百分比链会断在那里，而按约定不去覆盖 antd 内部类名。 */}
+        <div style={{ flex: '1 1 auto', minHeight: 0, padding: '0 16px 12px' }}>
+          <Tabs
+            activeKey={mainTab}
+            onChange={setMainTab}
+            tabBarExtraContent={
+              hasForm ? (
+                <span style={{ color: '#94a3b8', fontSize: 12 }}>
+                  表头字段 {leafCount} 个 · 表结构 {blockCount} 个
+                </span>
+              ) : null
+            }
+            items={[
+              {
+                key: 'form',
+                label: '动态表单视图',
+                style: PANE_STYLE,
+                children: (
+                  <div style={{ height: '100%', overflow: 'auto', paddingRight: 4 }}>
+                    {!hasForm && (
+                      <Alert
+                        type="info"
+                        showIcon
+                        style={{ marginBottom: 16 }}
+                        message="尚未生成表单"
+                        description="在上方函数栏填 FM 名称后点「从 SAP 后端拉取」；也可以切到「JSON Schema 结构」页手动粘贴元数据或 Schema。"
+                      />
+                    )}
+                    <BlockCollapseContext.Provider value={collapseCmd}>
+                      <FormProvider form={form}>
+                        <FormLayout layout="vertical">
+                          <SchemaField schema={renderSchema} />
+                        </FormLayout>
+                      </FormProvider>
+                    </BlockCollapseContext.Provider>
+                  </div>
+                ),
+              },
+              {
+                key: 'schema',
+                label: 'JSON Schema 结构',
+                style: PANE_STYLE,
+                children: (
+                  <SchemaPane
+                    mode={schemaMode}
+                    setMode={setSchemaMode}
+                    metaText={metaInputText}
+                    setMetaText={setMetaInputText}
+                    onConvertMeta={convertMetaAndGenerate}
+                    schemaText={metaText}
+                    setSchemaText={setMetaText}
+                    onApplySchema={applyJsonToForm}
+                    error={metaError}
+                  />
+                ),
+              },
+              {
+                key: 'payload',
+                label: '请求 Body 预览 & 填充',
+                style: PANE_STYLE,
+                children: (
+                  <PayloadPane
+                    form={form}
+                    active={mainTab === 'payload'}
+                    onFill={fillValues}
+                    disabled={!hasForm}
+                  />
+                ),
+              },
+            ]}
+          />
         </div>
 
         {/* ===== 弹窗 ===== */}
-        <MetaModal
-          open={metaOpen}
-          onClose={() => setMetaOpen(false)}
-          funcName={metaFuncName}
-          setFuncName={setMetaFuncName}
-          loading={metaLoading}
-          onFetchAndGenerate={() => fetchAndGenerate()}
-          aiLoading={metaAiLoading}
-          onFetchAndGenerateAI={() => fetchAndGenerate({ action: SAP.metadataAiAction, ai: true })}
-          envLabel={IS_DEV ? ENVIRONMENTS[env].label : ''}
-          showMetaInput={metaShowInput}
-          setShowMetaInput={setMetaShowInput}
-          metaInputText={metaInputText}
-          setMetaInputText={setMetaInputText}
-          onConvertMeta={convertMetaAndGenerate}
-          showJson={metaShowJson}
-          setShowJson={setMetaShowJson}
-          metaText={metaText}
-          setMetaText={setMetaText}
-          onApplyJson={applyJsonToForm}
-          metaError={metaError}
-        />
-
-        <DataFillModal
-          open={dataOpen}
-          onClose={() => setDataOpen(false)}
-          onFill={handleFill}
-          dataText={dataText}
-          setDataText={setDataText}
-          dataError={dataError}
-        />
-
-        <HistoryModal
-          open={historyOpen}
-          onClose={() => setHistoryOpen(false)}
-          history={history}
-          loading={historyLoading}
-          onRestore={restoreFromHistory}
-          onRename={onRenameHistory}
-          onViewBody={onViewHistoryBody}
-          onShare={openShare}
-          onDelete={onDeleteHistory}
-          onClear={onClearHistory}
-          onExport={onExportHistory}
-          onExportOne={onExportOne}
-          onImportFile={onImportHistoryFile}
-        />
-
-        <VariantModal
-          open={variantOpen}
-          onClose={() => setVariantOpen(false)}
-          variants={variants}
-          loading={variantLoading}
-          canSave={hasForm}
-          onSave={onSaveVariant}
-          onRestore={restoreVariant}
-          onShare={openShare}
-          onDelete={onDeleteVariant}
-          onClear={onClearVariants}
-          onExport={onExportVariants}
-          onExportOne={onExportOneVariant}
-          onImportFile={onImportVariantFile}
-        />
-
-        <ShareInboxModal
-          open={inboxOpen}
-          onClose={() => setInboxOpen(false)}
-          inbox={inbox}
-          loading={inboxLoading}
-          onFill={onInboxFill}
-          onSaveAs={onInboxSaveAs}
-          onRemove={onInboxRemove}
+        <AssetHubModal
+          open={hubOpen}
+          onClose={() => setHubOpen(false)}
+          history={{
+            list: history,
+            loading: historyLoading,
+            onFill: restoreFromHistory,
+            onRename: onRenameHistory,
+            onViewBody: onViewHistoryBody,
+            onShare: openShare,
+            onDelete: onDeleteHistory,
+            onClear: onClearHistory,
+            onExportAll: onExportHistory,
+            onExportOne,
+            onImportFile: onImportHistoryFile,
+          }}
+          variants={{
+            list: variants,
+            loading: variantLoading,
+            canSave: hasForm,
+            onSave: onSaveVariant,
+            onFill: restoreVariant,
+            onShare: openShare,
+            onDelete: onDeleteVariant,
+            onClear: onClearVariants,
+            onExportAll: onExportVariants,
+            onExportOne: onExportOneVariant,
+            onImportFile: onImportVariantFile,
+          }}
+          inbox={{
+            list: inbox,
+            loading: inboxLoading,
+            onFill: onInboxFill,
+            onSaveAs: onInboxSaveAs,
+            onRemove: onInboxRemove,
+          }}
         />
 
         {/* 分享小窗：手动填接收人 SAP 用户名 + 附言（全用 antd 现成组件） */}
