@@ -1,0 +1,63 @@
+- generic [ref=e3]:
+  - generic [ref=e5]:
+    - generic [ref=e6]:
+      - img "api" [ref=e8]
+      - generic [ref=e11]:
+        - generic [ref=e12]:
+          - strong [ref=e14]: SAP 动态表单工作台
+          - generic [ref=e17] [cursor=pointer]:
+            - generic [ref=e18]: 开发
+            - img "down" [ref=e20]
+        - generic [ref=e23]: Formily 驱动 · 元数据即表单
+    - generic [ref=e24]:
+      - button "database 数据资产中心 0 0" [ref=e27] [cursor=pointer]:
+        - img "database" [ref=e29]
+        - generic [ref=e32]: 数据资产中心
+        - generic "调用记录数" [ref=e33]: "0"
+        - generic "变式数" [ref=e34]: "0"
+      - generic [ref=e36]:
+        - button "column-height 全部折叠" [disabled] [ref=e37]:
+          - generic:
+            - img "column-height"
+          - generic: 全部折叠
+        - button "eye 字段显隐" [disabled] [ref=e38]:
+          - generic:
+            - img "eye"
+          - generic: 字段显隐
+      - button "send 提交并调用 SAP" [disabled] [ref=e40]:
+        - generic:
+          - img "send"
+        - generic: 提交并调用 SAP
+  - generic [ref=e42]:
+    - generic [ref=e44]:
+      - img "thunderbolt" [ref=e45]
+      - text: SAP 函数名称
+    - generic [ref=e49]:
+      - img "search" [ref=e51]
+      - textbox "如 ZTEST_STR" [ref=e54]: Z_SRM_CREATE_PO
+    - generic [ref=e56]:
+      - button "从 SAP 后端拉取" [ref=e57] [cursor=pointer]
+      - button "▾" [ref=e59] [cursor=pointer]
+  - generic [ref=e61]:
+    - radiogroup "segmented control" [ref=e63]:
+      - generic [ref=e64]:
+        - generic [ref=e65] [cursor=pointer]:
+          - radio "appstore 动态表单视图" [checked]
+          - generic [ref=e66]:
+            - img "appstore" [ref=e68]
+            - text: 动态表单视图
+        - generic [ref=e71] [cursor=pointer]:
+          - radio "code JSON Schema 结构"
+          - generic [ref=e72]:
+            - img "code" [ref=e74]
+            - text: JSON Schema 结构
+        - generic [ref=e77] [cursor=pointer]:
+          - radio "file-text 请求 Body 预览 & 填充"
+          - generic [ref=e78]:
+            - img "file-text" [ref=e80]
+            - text: 请求 Body 预览 & 填充
+    - alert [ref=e86]:
+      - img "info-circle" [ref=e87]
+      - generic [ref=e90]:
+        - generic [ref=e91]: 尚未生成表单
+        - generic [ref=e92]: 在上方函数栏填 FM 名称后点「从 SAP 后端拉取」；也可以切到「JSON Schema 结构」页手动粘贴元数据或 Schema。

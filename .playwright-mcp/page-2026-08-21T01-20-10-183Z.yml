@@ -1,0 +1,72 @@
+- generic [ref=f1e3]:
+  - generic [ref=f1e5]:
+    - generic [ref=f1e6]:
+      - img "api" [ref=f1e8]
+      - generic [ref=f1e11]:
+        - generic [ref=f1e12]:
+          - strong [ref=f1e14]: SAP 动态表单工作台
+          - generic [ref=f1e17] [cursor=pointer]:
+            - generic [ref=f1e18]: 开发
+            - img "down" [ref=f1e20]
+        - generic [ref=f1e23]: Formily 驱动 · 元数据即表单
+    - generic [ref=f1e24]:
+      - button "database 数据资产中心 0 0" [ref=f1e27] [cursor=pointer]:
+        - img "database" [ref=f1e29]
+        - generic [ref=f1e32]: 数据资产中心
+        - generic "调用记录数" [ref=f1e33]: "0"
+        - generic "变式数" [ref=f1e34]: "0"
+      - generic [ref=f1e36]:
+        - button "column-height 全部折叠" [ref=f1e37] [cursor=pointer]:
+          - img "column-height" [ref=f1e110]
+          - generic [ref=f1e113]: 全部折叠
+        - button "eye 字段显隐" [ref=f1e38] [cursor=pointer]:
+          - img "eye" [ref=f1e115]
+          - generic [ref=f1e118]: 字段显隐
+      - button "send 提交并调用 SAP" [ref=f1e40] [cursor=pointer]:
+        - img "send" [ref=f1e120]
+        - generic [ref=f1e123]: 提交并调用 SAP
+  - generic [ref=f1e42]:
+    - generic [ref=f1e44]:
+      - img "thunderbolt" [ref=f1e45]
+      - text: SAP 函数名称
+    - generic [ref=f1e49]:
+      - img "search" [ref=f1e51]
+      - textbox "如 ZTEST_STR" [ref=f1e54]: Z_SRM_CREATE_PO
+    - generic [ref=f1e56]:
+      - button "从 SAP 后端拉取" [ref=f1e57] [cursor=pointer]
+      - button "▾" [ref=f1e59] [cursor=pointer]
+  - generic [ref=f1e61]:
+    - generic [ref=f1e62]:
+      - radiogroup "segmented control" [ref=f1e63]:
+        - generic [ref=f1e64]:
+          - generic [ref=f1e65] [cursor=pointer]:
+            - radio "appstore 动态表单视图"
+            - generic [ref=f1e66]:
+              - img "appstore" [ref=f1e68]
+              - text: 动态表单视图
+          - generic [ref=f1e71] [cursor=pointer]:
+            - radio "code JSON Schema 结构" [checked] [active]
+            - generic [ref=f1e72]:
+              - img "code" [ref=f1e74]
+              - text: JSON Schema 结构
+          - generic [ref=f1e77] [cursor=pointer]:
+            - radio "file-text 请求 Body 预览 & 填充"
+            - generic [ref=f1e78]:
+              - img "file-text" [ref=f1e80]
+              - text: 请求 Body 预览 & 填充
+      - generic [ref=f1e124]: 表头字段 2 个 · 表结构 2 个
+    - generic [ref=f1e94]:
+      - generic [ref=f1e95]:
+        - radiogroup "segmented control" [ref=f1e97]:
+          - generic [ref=f1e98]:
+            - generic [ref=f1e99] [cursor=pointer]:
+              - radio "中性元数据" [checked]
+              - generic "中性元数据" [ref=f1e100]
+            - generic [ref=f1e101] [cursor=pointer]:
+              - radio "Formily Schema"
+              - generic "Formily Schema" [ref=f1e102]
+        - generic [ref=f1e103]: 中性元数据 JSON（后端 /元数据接口的原始返回格式）。转换会生成一个全新表单：已填的值和字段显隐配置都会重置。
+      - 'textbox "粘贴中性元数据 JSON，再点「转换并生成」。 例： { \"function\": \"ZTEST_STR\", \"params\": [ { \"name\": \"IV_MATNR\", \"kind\": \"ELEM\", \"label\": \"物料号\", \"ddic_type\": \"CHAR\", \"length\": 18, \"required\": true } ] }" [ref=f1e105]':
+        - /placeholder: "粘贴中性元数据 JSON，再点「转换并生成」。\n例：\n{\n  \"function\": \"ZTEST_STR\",\n  \"params\": [\n    { \"name\": \"IV_MATNR\", \"kind\": \"ELEM\", \"label\": \"物料号\", \"ddic_type\": \"CHAR\", \"length\": 18, \"required\": true }\n  ]\n}"
+        - text: "{ \"function\": \"ZTEST_UI\", \"params\": [ { \"name\": \"IV_EBELN\", \"kind\": \"ELEM\", \"label\": \"采购订单号\", \"ddic_type\": \"CHAR\", \"length\": 10, \"required\": true }, { \"name\": \"IV_BEDAT\", \"kind\": \"ELEM\", \"label\": \"凭证日期\", \"ddic_type\": \"DATS\" }, { \"name\": \"IS_HEADER\", \"kind\": \"STRUCTURE\", \"label\": \"抬头\", \"fields\": [ { \"name\": \"BUKRS\", \"kind\": \"ELEM\", \"label\": \"公司代码\", \"ddic_type\": \"CHAR\", \"length\": 4 }, { \"name\": \"LIFNR\", \"kind\": \"ELEM\", \"label\": \"供应商\", \"ddic_type\": \"CHAR\", \"length\": 10 } ] }, { \"name\": \"IT_ITEMS\", \"kind\": \"TABLE\", \"label\": \"行项目\", \"columns\": [ { \"name\": \"MATNR\", \"kind\": \"ELEM\", \"label\": \"物料号\", \"ddic_type\": \"CHAR\", \"length\": 18 }, { \"name\": \"MENGE\", \"kind\": \"ELEM\", \"label\": \"数量\", \"ddic_type\": \"QUAN\" } ] } ] }"
+      - button "转换并生成表单 ▶" [ref=f1e108] [cursor=pointer]

@@ -1,0 +1,114 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e3]:
+    - generic [ref=f1e5]:
+      - generic [ref=f1e6]:
+        - img "api" [ref=f1e8]
+        - generic [ref=f1e11]:
+          - generic [ref=f1e12]:
+            - strong [ref=f1e14]: SAP 动态表单工作台
+            - generic [ref=f1e17] [cursor=pointer]:
+              - generic [ref=f1e18]: 开发
+              - img "down" [ref=f1e20]
+          - generic [ref=f1e23]: Formily 驱动 · 元数据即表单
+      - generic [ref=f1e24]:
+        - button "database 数据资产中心 0 0" [ref=f1e27] [cursor=pointer]:
+          - img "database" [ref=f1e29]
+          - generic [ref=f1e32]: 数据资产中心
+          - generic "调用记录数" [ref=f1e33]: "0"
+          - generic "变式数" [ref=f1e34]: "0"
+        - generic [ref=f1e36]:
+          - button "column-height 全部折叠" [ref=f1e37] [cursor=pointer]:
+            - img "column-height" [ref=f1e110]
+            - generic [ref=f1e113]: 全部折叠
+          - button "eye 字段显隐" [ref=f1e38] [cursor=pointer]:
+            - img "eye" [ref=f1e115]
+            - generic [ref=f1e118]: 字段显隐
+        - button "send 提交并调用 SAP" [ref=f1e40] [cursor=pointer]:
+          - img "send" [ref=f1e120]
+          - generic [ref=f1e123]: 提交并调用 SAP
+    - generic [ref=f1e42]:
+      - generic [ref=f1e44]:
+        - img "thunderbolt" [ref=f1e45]
+        - text: SAP 函数名称
+      - generic [ref=f1e49]:
+        - img "search" [ref=f1e51]
+        - textbox "如 ZTEST_STR" [ref=f1e54]: Z_SRM_CREATE_PO
+      - generic [ref=f1e56]:
+        - button "从 SAP 后端拉取" [ref=f1e57] [cursor=pointer]
+        - button "▾" [ref=f1e59] [cursor=pointer]
+    - generic [ref=f1e61]:
+      - generic [ref=f1e62]:
+        - radiogroup "segmented control" [ref=f1e63]:
+          - generic [ref=f1e64]:
+            - generic [ref=f1e65] [cursor=pointer]:
+              - radio "appstore 动态表单视图" [checked]
+              - generic [ref=f1e66]:
+                - img "appstore" [ref=f1e68]
+                - text: 动态表单视图
+            - generic [ref=f1e71] [cursor=pointer]:
+              - radio "code JSON Schema 结构"
+              - generic [ref=f1e72]:
+                - img "code" [ref=f1e74]
+                - text: JSON Schema 结构
+            - generic [ref=f1e77] [cursor=pointer]:
+              - radio "file-text 请求 Body 预览 & 填充"
+              - generic [ref=f1e78]:
+                - img "file-text" [ref=f1e80]
+                - text: 请求 Body 预览 & 填充
+        - generic [ref=f1e124]: 表头字段 2 个 · 表结构 2 个
+      - generic [ref=f1e125]:
+        - generic [ref=f1e126]:
+          - generic [ref=f1e127]:
+            - generic [ref=f1e128]:
+              - generic [ref=f1e130]:
+                - generic [ref=f1e131]: "*"
+                - text: 采购订单号
+              - generic [ref=f1e132]: ":"
+            - textbox [ref=f1e137]
+          - generic [ref=f1e138]:
+            - generic [ref=f1e139]:
+              - generic [ref=f1e140]: 凭证日期
+              - generic [ref=f1e142]: ":"
+            - generic [ref=f1e147]:
+              - textbox "请选择日期" [ref=f1e148]
+              - generic:
+                - img "calendar"
+        - generic [ref=f1e149]:
+          - generic [ref=f1e151]:
+            - generic [ref=f1e152]: 抬头
+            - img "down" [ref=f1e157] [cursor=pointer]
+          - generic [ref=f1e161]:
+            - generic [ref=f1e162]:
+              - generic [ref=f1e163]:
+                - generic [ref=f1e164]: 公司代码
+                - generic [ref=f1e166]: ":"
+              - textbox [ref=f1e171]
+            - generic [ref=f1e172]:
+              - generic [ref=f1e173]:
+                - generic [ref=f1e174]: 供应商
+                - generic [ref=f1e176]: ":"
+              - textbox [ref=f1e181]
+        - generic [ref=f1e182]:
+          - generic [ref=f1e184]:
+            - generic [ref=f1e185]: 行项目
+            - img "down" [ref=f1e190] [cursor=pointer]
+          - generic [ref=f1e194]:
+            - table [ref=f1e201]:
+              - rowgroup [ref=f1e206]:
+                - row [ref=f1e207]:
+                  - columnheader "物料号" [ref=f1e208]
+                  - columnheader "数量" [ref=f1e209]
+                  - columnheader "操作" [ref=f1e210]
+              - rowgroup [ref=f1e211]:
+                - row [ref=f1e212]:
+                  - cell "暂无数据 暂无数据" [ref=f1e213]:
+                    - generic [ref=f1e215]:
+                      - img "暂无数据" [ref=f1e217]
+                      - generic [ref=f1e223]: 暂无数据
+                - status [ref=f1e224]
+            - button "plus 新增「行项目」" [ref=f1e225] [cursor=pointer]:
+              - img "plus" [ref=f1e227]
+              - generic [ref=f1e231]: 新增「行项目」
+  - generic [ref=f1e233]:
+    - img "check-circle" [ref=f1e234]
+    - generic [ref=f1e237]: 已按手填元数据生成表单

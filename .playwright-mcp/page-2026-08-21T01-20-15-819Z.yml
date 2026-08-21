@@ -1,0 +1,66 @@
+- generic [ref=f1e3]:
+  - generic [ref=f1e5]:
+    - generic [ref=f1e6]:
+      - img "api" [ref=f1e8]
+      - generic [ref=f1e11]:
+        - generic [ref=f1e12]:
+          - strong [ref=f1e14]: SAP 动态表单工作台
+          - generic [ref=f1e17] [cursor=pointer]:
+            - generic [ref=f1e18]: 开发
+            - img "down" [ref=f1e20]
+        - generic [ref=f1e23]: Formily 驱动 · 元数据即表单
+    - generic [ref=f1e24]:
+      - button "database 数据资产中心 0 0" [ref=f1e27] [cursor=pointer]:
+        - img "database" [ref=f1e29]
+        - generic [ref=f1e32]: 数据资产中心
+        - generic "调用记录数" [ref=f1e33]: "0"
+        - generic "变式数" [ref=f1e34]: "0"
+      - generic [ref=f1e36]:
+        - button "column-height 全部折叠" [ref=f1e37] [cursor=pointer]:
+          - img "column-height" [ref=f1e110]
+          - generic [ref=f1e113]: 全部折叠
+        - button "eye 字段显隐" [ref=f1e38] [cursor=pointer]:
+          - img "eye" [ref=f1e115]
+          - generic [ref=f1e118]: 字段显隐
+      - button "send 提交并调用 SAP" [ref=f1e40] [cursor=pointer]:
+        - img "send" [ref=f1e120]
+        - generic [ref=f1e123]: 提交并调用 SAP
+  - generic [ref=f1e42]:
+    - generic [ref=f1e44]:
+      - img "thunderbolt" [ref=f1e45]
+      - text: SAP 函数名称
+    - generic [ref=f1e49]:
+      - img "search" [ref=f1e51]
+      - textbox "如 ZTEST_STR" [ref=f1e54]: Z_SRM_CREATE_PO
+    - generic [ref=f1e56]:
+      - button "从 SAP 后端拉取" [ref=f1e57] [cursor=pointer]
+      - button "▾" [ref=f1e59] [cursor=pointer]
+  - generic [ref=f1e61]:
+    - generic [ref=f1e62]:
+      - radiogroup "segmented control" [ref=f1e63]:
+        - generic [ref=f1e64]:
+          - generic [ref=f1e65] [cursor=pointer]:
+            - radio "appstore 动态表单视图"
+            - generic [ref=f1e66]:
+              - img "appstore" [ref=f1e68]
+              - text: 动态表单视图
+          - generic [ref=f1e71] [cursor=pointer]:
+            - radio "code JSON Schema 结构"
+            - generic [ref=f1e72]:
+              - img "code" [ref=f1e74]
+              - text: JSON Schema 结构
+          - generic [ref=f1e77] [cursor=pointer]:
+            - radio "file-text 请求 Body 预览 & 填充" [checked] [active]
+            - generic [ref=f1e78]:
+              - img "file-text" [ref=f1e80]
+              - text: 请求 Body 预览 & 填充
+      - generic [ref=f1e124]: 表头字段 2 个 · 表结构 2 个
+    - generic [ref=f1e331]:
+      - generic [ref=f1e332]:
+        - generic [ref=f1e333]: 实时跟随表单
+        - generic [ref=f1e335]: 这就是点「提交并调用 SAP」时发给函数的入参；被隐藏的字段照样提交。
+      - textbox "尚未生成表单" [ref=f1e337]: "{ \"IS_HEADER\": { \"BUKRS\": \"1000\", \"LIFNR\": \"V0001\" }, \"IT_ITEMS\": [ { \"MATNR\": \"MAT-001\" }, { \"MATNR\": \"MAT-002\" } ], \"IV_EBELN\": \"4500001234\" }"
+      - generic [ref=f1e338]:
+        - button "同步 Body 至表单 ▶" [ref=f1e340] [cursor=pointer]
+        - button "复制 JSON" [ref=f1e343] [cursor=pointer]
+        - button "重置为当前表单" [disabled] [ref=f1e346]

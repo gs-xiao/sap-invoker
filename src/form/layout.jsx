@@ -54,7 +54,11 @@ export const Block = ({ children, title, ...rest }) => {
           {open ? <DownOutlined /> : <RightOutlined />}
         </a>
       }
-      style={{ flexBasis: '100%', width: '100%', marginBottom: 12 }}
+      style={{
+        flexBasis: '100%', width: '100%', marginBottom: 12,
+        // 卡片圆角走主题的 borderRadiusLG；再压一层极淡的投影，让白卡从浅灰页底上浮起来
+        boxShadow: '0 1px 2px rgba(15,23,42,.04)',
+      }}
       styles={{
         body: { display: open ? 'block' : 'none' },
       }}

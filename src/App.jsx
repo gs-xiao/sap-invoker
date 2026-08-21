@@ -2,15 +2,19 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { FormProvider } from '@formily/react'
 import { FormLayout } from '@formily/antd-v5'
 import {
-  ConfigProvider, message, Alert, Button, Space, Badge, Tabs, Dropdown,
+  ConfigProvider, message, Alert, Button, Space, Badge, Segmented, Dropdown,
   Input as AntInput, Modal,
 } from 'antd'
-import { DatabaseOutlined, SearchOutlined, CloudDownloadOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import {
+  DatabaseOutlined, SearchOutlined, CloudDownloadOutlined, ThunderboltOutlined,
+  ApiOutlined, AppstoreOutlined, CodeOutlined, FileTextOutlined,
+  SendOutlined, EyeOutlined, ColumnHeightOutlined, ThunderboltFilled,
+} from '@ant-design/icons'
 import zhCN from 'antd/locale/zh_CN'
 import 'antd/dist/reset.css'
 
 import { ENVIRONMENTS, SAP, IS_DEV } from './config'
-import { theme, SURFACE, HAIRLINE } from './theme'
+import { theme, SURFACE, HAIRLINE, BRAND, MUTED, CONTENT_MAX } from './theme'
 import { SchemaField } from './form/schemaField'
 import { BlockCollapseContext } from './form/layout'
 import { metadataToSchema } from './metadataToSchema'
@@ -27,9 +31,39 @@ import PayloadPane from './components/PayloadPane'
 import ResultModal from './components/ResultModal'
 import VisibilityModal from './components/VisibilityModal'
 
-// Tab 面板高度 = 视口高 - （顶栏 + 函数栏 + 页签栏 + 下边距）。面板内部再自己滚动，
-// 这样长表单滚动时顶栏和函数栏始终留在原地。
-const PANE_STYLE = { height: 'calc(100vh - 178px)' }
+// 顶栏右侧「全部折叠 / 字段显隐」这类次级动作装在一个浅灰槽里，跟主色的提交按钮拉开层次
+const BTN_GROUP_STYLE = {
+  display: 'inline-flex',
+  gap: 2,
+  padding: 2,
+  background: '#eef2f7',
+  borderRadius: 10,
+}
+
+// 资产中心按钮上的小圆计数
+const pill = (bg, color) => ({
+  display: 'inline-block',
+  minWidth: 18,
+  padding: '0 6px',
+  marginLeft: 4,
+  background: bg,
+  color,
+  fontSize: 11,
+  fontWeight: 700,
+  lineHeight: '17px',
+  borderRadius: 9,
+  textAlign: 'center',
+})
+
+// 主区三个面板：始终挂载，靠 display 切换。
+//
+// 绝不能改成条件渲染 —— 表单面板一旦从 DOM 摘掉，Formily 字段模型会走 onUnmount 从
+// form graph 里移除，切回来时已填的值、ArrayTable 的行、校验态全部重来。
+const Pane = ({ show, children }) => (
+  <div style={{ display: show ? 'flex' : 'none', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+    {children}
+  </div>
+)
 
 export default function App() {
   // 表单生命周期（schema / 显隐 / form 重建 / 派生数据）集中在此 hook
@@ -570,29 +604,53 @@ export default function App() {
             zIndex: 10,
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-            <Space wrap size={10}>
-              <strong style={{ fontSize: 15 }}>SAP 动态表单工作台</strong>
-              <span style={{ color: '#94a3b8', fontSize: 12 }}>Formily 驱动 · 元数据即表单</span>
-              <ConnectionPopover
-                env={env}
-                username={username}
-                password={password}
-                onApply={applyConnection}
-                applying={connBusy}
-              />
-            </Space>
+          <div style={{ maxWidth: CONTENT_MAX, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+            {/* 左：品牌标识 + 标题/副标题两行 + 环境 chip */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div
+                style={{
+                  width: 34, height: 34, borderRadius: 10, background: BRAND, color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 17, boxShadow: '0 4px 10px rgba(37,99,235,.25)',
+                }}
+              >
+                <ApiOutlined />
+              </div>
+              <div style={{ lineHeight: 1.35 }}>
+                <Space size={8}>
+                  <strong style={{ fontSize: 15 }}>SAP 动态表单工作台</strong>
+                  <ConnectionPopover
+                    env={env}
+                    username={username}
+                    password={password}
+                    onApply={applyConnection}
+                    applying={connBusy}
+                  />
+                </Space>
+                <div style={{ color: MUTED, fontSize: 11 }}>Formily 驱动 · 元数据即表单</div>
+              </div>
+            </div>
 
-            <Space wrap size={8}>
+            {/* 右：资产中心 + 次级动作组 + 主操作 */}
+            <Space wrap size={10}>
               <Badge dot count={unreadShares} offset={[-6, 4]}>
                 <Button icon={<DatabaseOutlined />} onClick={openAssetHub} loading={historyLoading || variantLoading}>
                   数据资产中心
-                  <span style={{ color: '#94a3b8', marginLeft: 4 }}>{history.length} / {variants.length}</span>
+                  <span style={pill('#dbeafe', '#1d4ed8')} title="调用记录数">{history.length}</span>
+                  <span style={pill('#fef3c7', '#b45309')} title="变式数">{variants.length}</span>
                 </Button>
               </Badge>
-              <Button onClick={toggleCollapseAll} disabled={!hasForm}>{allCollapsed ? '全部展开' : '全部折叠'}</Button>
-              <Button onClick={openVisConfig} disabled={!hasForm}>字段显隐</Button>
-              <Button type="primary" danger loading={submitting} disabled={!hasForm} onClick={doSubmit}>
+
+              <div style={BTN_GROUP_STYLE}>
+                <Button type="text" icon={<ColumnHeightOutlined />} onClick={toggleCollapseAll} disabled={!hasForm}>
+                  {allCollapsed ? '全部展开' : '全部折叠'}
+                </Button>
+                <Button type="text" icon={<EyeOutlined />} onClick={openVisConfig} disabled={!hasForm}>
+                  字段显隐
+                </Button>
+              </div>
+
+              <Button type="primary" danger icon={<SendOutlined />} loading={submitting} disabled={!hasForm} onClick={doSubmit}>
                 提交并调用 SAP
               </Button>
             </Space>
@@ -608,8 +666,11 @@ export default function App() {
             padding: '10px 16px',
           }}
         >
-          <Space wrap size={8}>
-            <span style={{ color: '#64748b' }}>SAP 函数名称</span>
+          <Space wrap size={8} style={{ maxWidth: CONTENT_MAX, margin: '0 auto', display: 'flex' }}>
+            <span style={{ color: '#64748b', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <ThunderboltFilled style={{ color: BRAND }} />
+              SAP 函数名称
+            </span>
             <AntInput
               value={metaFuncName}
               onChange={(e) => setMetaFuncName(e.target.value)}
@@ -631,7 +692,9 @@ export default function App() {
                   { key: 'normal', icon: <CloudDownloadOutlined />, label: FETCH_MODES.normal.label },
                   { key: 'ai', icon: <ThunderboltOutlined />, label: FETCH_MODES.ai.label },
                 ],
-                onClick: ({ key }) => { setFetchMode(key); FETCH_MODES[key].run() },
+                // 下拉只切换方式，不顺手执行。AI 解析那条是要花钱花时间的，
+                // 展开菜单看一眼有哪些选项就触发一次请求太吓人；选完由用户自己点主键。
+                onClick: ({ key }) => setFetchMode(key),
               }}
             >
               {FETCH_MODES[fetchMode].label}
@@ -639,83 +702,82 @@ export default function App() {
           </Space>
         </div>
 
-        {/* ===== ③ 主区三 Tab =====
-            注意：这里绝不能开 destroyOnHidden / destroyInactiveTabPane。表单面板一旦被销毁，
-            Formily 字段模型会走 onUnmount 从 form graph 里摘掉，切回来时已填的值、表格行、
-            校验态都要重来。antd Tabs 默认保留非激活面板的 DOM，正是我们需要的行为。
+        {/* ===== ③ 主区三个面板 =====
+            页签用 Segmented（胶囊样式）而不是 antd Tabs：Tabs 的 type="card" 选中背景写死在
+            样式里、token 改不了，做不出「选中=主色底白字」；换成 Segmented 后面板归我们自己管，
+            高度也能规规矩矩用 flex 撑满，不必再拿 calc(100vh - 178px) 去猜顶部占了多高。
 
-            面板高度用 calc(100vh - 顶栏/函数栏/页签栏) 定死，而不是 height:100% 层层继承——
-            antd 的 .ant-tabs-content 没有高度，百分比链会断在那里，而按约定不去覆盖 antd 内部类名。 */}
-        <div style={{ flex: '1 1 auto', minHeight: 0, padding: '0 16px 12px' }}>
-          <Tabs
-            activeKey={mainTab}
-            onChange={setMainTab}
-            tabBarExtraContent={
-              hasForm ? (
-                <span style={{ color: '#94a3b8', fontSize: 12 }}>
-                  表头字段 {leafCount} 个 · 表结构 {blockCount} 个
-                </span>
-              ) : null
-            }
-            items={[
-              {
-                key: 'form',
-                label: '动态表单视图',
-                style: PANE_STYLE,
-                children: (
-                  <div style={{ height: '100%', overflow: 'auto', paddingRight: 4 }}>
-                    {!hasForm && (
-                      <Alert
-                        type="info"
-                        showIcon
-                        style={{ marginBottom: 16 }}
-                        message="尚未生成表单"
-                        description="在上方函数栏填 FM 名称后点「从 SAP 后端拉取」；也可以切到「JSON Schema 结构」页手动粘贴元数据或 Schema。"
-                      />
-                    )}
-                    <BlockCollapseContext.Provider value={collapseCmd}>
-                      <FormProvider form={form}>
-                        <FormLayout layout="vertical">
-                          <SchemaField schema={renderSchema} />
-                        </FormLayout>
-                      </FormProvider>
-                    </BlockCollapseContext.Provider>
-                  </div>
-                ),
-              },
-              {
-                key: 'schema',
-                label: 'JSON Schema 结构',
-                style: PANE_STYLE,
-                children: (
-                  <SchemaPane
-                    mode={schemaMode}
-                    setMode={setSchemaMode}
-                    metaText={metaInputText}
-                    setMetaText={setMetaInputText}
-                    onConvertMeta={convertMetaAndGenerate}
-                    schemaText={metaText}
-                    setSchemaText={setMetaText}
-                    onApplySchema={applyJsonToForm}
-                    error={metaError}
+            代价是「切换时不能卸载面板」这条约束从依赖 antd 的默认行为变成我们自己保证 ——
+            见上面 Pane 组件，用 display 切换，绝不条件渲染。 */}
+        <div
+          style={{
+            flex: '1 1 auto', minHeight: 0, padding: '12px 16px',
+            maxWidth: CONTENT_MAX, width: '100%', margin: '0 auto', boxSizing: 'border-box',
+            display: 'flex', flexDirection: 'column',
+          }}
+        >
+          <div style={{ flex: '0 0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+            <Segmented
+              value={mainTab}
+              onChange={setMainTab}
+              options={[
+                { value: 'form', label: '动态表单视图', icon: <AppstoreOutlined /> },
+                { value: 'schema', label: 'JSON Schema 结构', icon: <CodeOutlined /> },
+                { value: 'payload', label: '请求 Body 预览 & 填充', icon: <FileTextOutlined /> },
+              ]}
+            />
+            {hasForm && (
+              <span style={{ color: MUTED, fontSize: 12 }}>
+                表头字段 {leafCount} 个 · 表结构 {blockCount} 个
+              </span>
+            )}
+          </div>
+
+          <div style={{ flex: '1 1 auto', minHeight: 0 }}>
+            <Pane show={mainTab === 'form'}>
+              <div style={{ flex: '1 1 auto', minHeight: 0, overflow: 'auto', paddingRight: 4 }}>
+                {!hasForm && (
+                  <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message="尚未生成表单"
+                    description="在上方函数栏填 FM 名称后点「从 SAP 后端拉取」；也可以切到「JSON Schema 结构」页手动粘贴元数据或 Schema。"
                   />
-                ),
-              },
-              {
-                key: 'payload',
-                label: '请求 Body 预览 & 填充',
-                style: PANE_STYLE,
-                children: (
-                  <PayloadPane
-                    form={form}
-                    active={mainTab === 'payload'}
-                    onFill={fillValues}
-                    disabled={!hasForm}
-                  />
-                ),
-              },
-            ]}
-          />
+                )}
+                <BlockCollapseContext.Provider value={collapseCmd}>
+                  <FormProvider form={form}>
+                    <FormLayout layout="vertical">
+                      <SchemaField schema={renderSchema} />
+                    </FormLayout>
+                  </FormProvider>
+                </BlockCollapseContext.Provider>
+              </div>
+            </Pane>
+
+            <Pane show={mainTab === 'schema'}>
+              <SchemaPane
+                mode={schemaMode}
+                setMode={setSchemaMode}
+                metaText={metaInputText}
+                setMetaText={setMetaInputText}
+                onConvertMeta={convertMetaAndGenerate}
+                schemaText={metaText}
+                setSchemaText={setMetaText}
+                onApplySchema={applyJsonToForm}
+                error={metaError}
+              />
+            </Pane>
+
+            <Pane show={mainTab === 'payload'}>
+              <PayloadPane
+                form={form}
+                active={mainTab === 'payload'}
+                onFill={fillValues}
+                disabled={!hasForm}
+              />
+            </Pane>
+          </div>
         </div>
 
         {/* ===== 弹窗 ===== */}
