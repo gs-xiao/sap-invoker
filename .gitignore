@@ -21,3 +21,5 @@ dist/
 Thumbs.db
 
 DEPLOY.md
+# Playwright MCP 调试产物（页面快照 / 控制台日志），非项目文件
+.playwright-mcp/
